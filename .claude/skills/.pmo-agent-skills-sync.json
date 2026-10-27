@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "skills": {
+    "graphify": {
+      "source_digest": "3eda1e9d36cd746db66779f15c41747f893afe64dcc62fb37024d60e58f10732",
+      "mirror_digest": "3eda1e9d36cd746db66779f15c41747f893afe64dcc62fb37024d60e58f10732"
+    },
+    "pmo-code-review": {
+      "source_digest": "3e6edc7d6d867e768ab91b6b6748bfba3ea59aa63b39bef534118ddc89032c1f",
+      "mirror_digest": "3e6edc7d6d867e768ab91b6b6748bfba3ea59aa63b39bef534118ddc89032c1f"
+    },
+    "pmo-feature-delivery": {
+      "source_digest": "8a9b29092aecb363cd9d0b9b3d5bf6927141b6aa7195571084be7478a8fa2fb9",
+      "mirror_digest": "8a9b29092aecb363cd9d0b9b3d5bf6927141b6aa7195571084be7478a8fa2fb9"
+    },
+    "pmo-frontend-ui": {
+      "source_digest": "ac22a0fc3f5ad5e9651a61c07fda4fbde34ecafa33d1b338c179c87431ba9acc",
+      "mirror_digest": "ac22a0fc3f5ad5e9651a61c07fda4fbde34ecafa33d1b338c179c87431ba9acc"
+    },
+    "pmo-github-workflow": {
+      "source_digest": "c24c4cf359005f015b7f0aa5c17d7fe858ed7d307683ed302096945349cfde2b",
+      "mirror_digest": "c24c4cf359005f015b7f0aa5c17d7fe858ed7d307683ed302096945349cfde2b"
+    },
+    "pmo-guidance-sync": {
+      "source_digest": "2ef7f0a14b79b098c5b322d91ce3a5cebafd1232ca2863120f220b2e926fc1a3",
+      "mirror_digest": "2ef7f0a14b79b098c5b322d91ce3a5cebafd1232ca2863120f220b2e926fc1a3"
+    },
+    "pmo-library-docs": {
+      "source_digest": "4a8a33ccb7c76e932a66216865012565174b53a3201bfe66bade63eceeb202dd",
+      "mirror_digest": "4a8a33ccb7c76e932a66216865012565174b53a3201bfe66bade63eceeb202dd"
+    },
+    "pmo-playwright-e2e": {
+      "source_digest": "587b876412b9dfbdcd86bdc6fe219d1075786dbb06ece963def8a6275a381071",
+      "mirror_digest": "587b876412b9dfbdcd86bdc6fe219d1075786dbb06ece963def8a6275a381071"
+    },
+    "pmo-python-analysis": {
+      "source_digest": "383c9986dc76cd8a683efa4dd1abacec4235937102acfdb5f0d673846784d34d",
+      "mirror_digest": "383c9986dc76cd8a683efa4dd1abacec4235937102acfdb5f0d673846784d34d"
+    },
+    "pmo-refactor": {
+      "source_digest": "dbe0e4ed35503a2073074b82a4c16d409d7273a643f56883af29f2c20393e9da",
+      "mirror_digest": "dbe0e4ed35503a2073074b82a4c16d409d7273a643f56883af29f2c20393e9da"
+    },
+    "pmo-security-review": {
+      "source_digest": "4ad83da47a34eac0165aaf3b3a7a89de260d6a149ef4cc45729476f5429b1c15",
+      "mirror_digest": "4ad83da47a34eac0165aaf3b3a7a89de260d6a149ef4cc45729476f5429b1c15"
+    },
+    "pmo-skill-authoring": {
+      "source_digest": "789db2bc422e9e27521d6dc265fd965e93cd398f36fd2a1e5534a45368dae7db",
+      "mirror_digest": "789db2bc422e9e27521d6dc265fd965e93cd398f36fd2a1e5534a45368dae7db"
+    }
+  },
+  "canonical_source": ".agents/skills",
+  "mirror": ".claude/skills",
+  "generated_at": "2026-10-27T23:02:53.926403+00:00"
+}

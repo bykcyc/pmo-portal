@@ -1,0 +1,93 @@
+# Прод-стек PMO-портала: три контейнера, ~1 ГБ RAM.
+#   Интернет →HTTPS→ caddy (статика SPA + прокси /api) → pmo-backend → pmo-db
+#
+#   cp .env.prod.example .env && nano .env      # заполнить секреты
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Данные: том pmo_pgdata. Бэкап всей системы = pg_dump (см. backup.sh).
+services:
+  pmo-db:
+    image: postgres:16-alpine
+    container_name: pmo-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pmo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # Наружу порт НЕ публикуем: доступ только из сети compose.
+
+  pmo-backend:
+    build:
+      context: ../pmo-backend
+      dockerfile: Dockerfile
+    container_name: pmo-backend
+    depends_on:
+      pmo-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pmo-db:5432/${POSTGRES_DB}
+      # production включает fail-fast: старт упадёт при дефолтном ADAPTER_SECRET
+      # и при включённом Bitrix без BITRIX24_INBOUND_TOKEN.
+      ADAPTER_ENV: production
+      ADAPTER_SECRET: ${ADAPTER_SECRET}
+      CORS_ORIGINS: https://${DOMAIN}
+      LOG_LEVEL: INFO
+      # Помощник (MCP). PORTAL_PUBLIC_URL — адрес, который портал объявляет клиенту помощника;
+      # MCP_ALLOWED_* — белый список из защиты SDK от DNS-rebinding: без домена в нём КАЖДЫЙ
+      # запрос вернул бы 421, и притом молча.
+      PORTAL_PUBLIC_URL: https://${DOMAIN}
+      MCP_ALLOWED_HOSTS: ${DOMAIN}
+      MCP_ALLOWED_ORIGINS: https://${DOMAIN}
+      BITRIX24_WEBHOOK_URL: ${BITRIX24_WEBHOOK_URL:-}
+      BITRIX24_DEFAULT_RESPONSIBLE_ID: ${BITRIX24_DEFAULT_RESPONSIBLE_ID:-1}
+      BITRIX24_INBOUND_TOKEN: ${BITRIX24_INBOUND_TOKEN:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      # Связка Fireflies → протокол в совещание PMO + комментарий к событию Битрикса.
+      # Выключена по умолчанию. FIREFLIES_ENABLED=1 без ключа или секрета — старт упадёт.
+      # Комментарии в Битрикс — отдельным флагом (нужен метод custom.calendar.comment.add).
+      # Списки — через запятую, пусто = без ограничений.
+      FIREFLIES_ENABLED: ${FIREFLIES_ENABLED:-}
+      FIREFLIES_API_KEY: ${FIREFLIES_API_KEY:-}
+      FIREFLIES_WEBHOOK_SECRET: ${FIREFLIES_WEBHOOK_SECRET:-}
+      FIREFLIES_BITRIX_COMMENTS: ${FIREFLIES_BITRIX_COMMENTS:-}
+      FIREFLIES_ALLOWED_PROJECTS: ${FIREFLIES_ALLOWED_PROJECTS:-}
+      FIREFLIES_ALLOWED_HOSTS: ${FIREFLIES_ALLOWED_HOSTS:-}
+      FIREFLIES_EXTRA_BITRIX_USERS: ${FIREFLIES_EXTRA_BITRIX_USERS:-}
+    restart: unless-stopped
+
+  caddy:
+    build:
+      context: ../RDProject/frontend
+      dockerfile: ../../deploy/Dockerfile.frontend
+    container_name: pmo-caddy
+    depends_on:
+      - pmo-backend
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # сертификаты Let's Encrypt — не терять при пересборке
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    restart: unless-stopped
+
+volumes:
+  pmo_pgdata:
+  caddy_data:
+  caddy_config:
+  caddy_logs:

@@ -1,0 +1,22 @@
+# Secrets — MUST never be baked into an image layer (P0).
+.env
+.env.*
+*.pem
+*.key
+
+# Python caches / local virtualenvs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# VCS + local artifacts
+.git/
+.gitignore
+.dockerignore
+*.log

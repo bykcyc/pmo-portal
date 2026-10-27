@@ -1,0 +1,70 @@
+# Весь портал одной командой из папки PMO:
+#
+#   docker compose up -d --build
+#
+# Три сервиса в одной сети → фронт ходит в бэкенд по имени (pmo-backend:8002),
+# бэкенд в базу по имени (pmo-db:5432). Правки кода видны сразу (том смонтирован):
+# бэкенд — docker restart pmo-backend; фронт — HMR подхватывает сам.
+# Прод — отдельно: deploy/docker-compose.prod.yml (Caddy + HTTPS).
+services:
+  pmo-db:
+    image: postgres:16-alpine
+    container_name: pmo-db
+    environment:
+      POSTGRES_USER: pmo
+      POSTGRES_PASSWORD: pmo
+      POSTGRES_DB: pmo
+    ports:
+      - "127.0.0.1:5433:5432" # dev DB доступна только с этой машины
+    volumes:
+      - pmo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pmo -d pmo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  pmo-backend:
+    build:
+      context: ./pmo-backend
+      dockerfile: Dockerfile
+    container_name: pmo-backend
+    depends_on:
+      pmo-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://pmo:pmo@pmo-db:5432/pmo
+      LOG_LEVEL: INFO
+      # Планировщик снимков/дайджестов. Выключают только на время сверки голденов:
+      #   SCHEDULER_DISABLED=1 docker compose up -d
+      SCHEDULER_DISABLED: ${SCHEDULER_DISABLED:-}
+    env_file:
+      - path: ./pmo-backend/.env   # ADAPTER_SECRET, BITRIX24_*, SMTP_* (см. .env.example)
+        required: false
+    ports:
+      - "127.0.0.1:8002:8002"
+    volumes:
+      - ./pmo-backend:/app
+    command: uvicorn asgi:app --host 0.0.0.0 --port 8002
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./RDProject/frontend
+      dockerfile: Dockerfile
+    container_name: pmo-frontend
+    depends_on:
+      - pmo-backend
+    environment:
+      # В общей сети compose фронт проксирует /api прямо в сервис бэкенда — без host loopback.
+      PMO_BACKEND: http://pmo-backend:8002
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./RDProject/frontend:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+volumes:
+  pmo_pgdata:

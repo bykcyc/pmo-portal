@@ -1,0 +1,13 @@
+{
+  "include": ["."],
+  "exclude": ["tests", "__pycache__"],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "pythonVersion": "3.11",
+      "extraPaths": ["."]
+    }
+  ]
+}

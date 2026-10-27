@@ -1,0 +1,105 @@
+# CI для PMO-портала: фронт (RDProject/frontend) + бэкенд (pmo-backend).
+# e2e (Playwright) и визуальная регрессия НЕ здесь — требуют живого стека, гоняются из C:\pw-runner.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    name: Frontend (tsc + vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: RDProject/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: RDProject/frontend/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Unit tests (vitest)
+        run: npx vitest run
+      # Advisory only: never fails the job, so tsc/vitest gating is unchanged.
+      - name: Dependency audit (npm, prod deps)
+        run: npm audit --omit=dev
+        continue-on-error: true
+
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pmo-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Match the runtime: Dockerfile is python:3.11-slim and
+          # pyrightconfig.json targets 3.11.
+          python-version: '3.11'
+      - name: Install deps
+        run: pip install -r requirements.txt pytest==8.3.4
+      - name: Unit tests (pytest)
+        run: python -m pytest tests -q
+      # Набор случаев разбора разметки живёт у фронта и зеркалится в тесты бэкенда: контейнеры
+      # изолированы, и один файл обоим наборам тестов не виден. Если зеркало отстанет, обе
+      # стороны продолжат проходить — каждая по своей копии, — и разойдутся молча. Ровно это
+      # с разбором разметки уже случалось дважды.
+      - name: Markup cases mirror is fresh
+        working-directory: .
+        run: python tools/markup/sync_cases.py --check
+      # Advisory only: never fails the job, so the pytest gate is unchanged.
+      - name: Dependency audit (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+        continue-on-error: true
+
+  pyright:
+    name: Backend types (pyright)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pmo-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps + pyright
+        run: pip install -r requirements.txt pyright
+      - name: Type-check (pyright)
+        # Uses pmo-backend/pyrightconfig.json (pythonVersion 3.11).
+        run: pyright
+
+  image:
+    name: Image hardening (.env absent)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t pmo-backend:ci pmo-backend
+      - name: Assert /app/.env is not baked into the image
+        run: docker run --rm --entrypoint sh pmo-backend:ci -lc 'test ! -e /app/.env'
+
+  guidance:
+    name: Repo guidance (skill mirror + graphify)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Skill mirror is in sync
+        run: python tools/agent_skills/sync_agent_skills.py check
+      # Advisory: graphify-out may not be committed; do not fail CI on a stale/missing snapshot.
+      - name: Graphify snapshot freshness
+        run: python tools/agent_skills/check_graphify_snapshot.py
+        continue-on-error: true

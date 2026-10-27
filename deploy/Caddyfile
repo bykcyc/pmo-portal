@@ -1,0 +1,75 @@
+# Единственная точка входа: авто-HTTPS (Let's Encrypt), статика SPA и прокси к бэкенду.
+# Для локальной проверки DOMAIN=localhost — Caddy отдаёт по HTTP без сертификата.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Фронт ходит в API строго через префикс /api (axios baseURL). handle_path срезает его,
+	# как это делал vite-proxy в разработке.
+	handle_path /api/* {
+		request_body {
+			max_size 26MB
+		}
+		reverse_proxy pmo-backend:8002
+	}
+
+	# Вебхук Fireflies: тело V2 — пять коротких полей, бэкенд режет на 64 КиБ. Потолок и здесь,
+	# чтобы анонимный поток не доходил до бэкенда. Отдельный блок (Caddy выбирает более точный
+	# путь раньше /webhooks/*) — лимит не задевает вебхук Битрикса.
+	handle /webhooks/fireflies {
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy pmo-backend:8002
+	}
+
+	# Входящий вебхук Bitrix24 (без префикса, адрес задаётся в самом Bitrix).
+	handle /webhooks/* {
+		reverse_proxy pmo-backend:8002
+	}
+
+	# Точка подключения помощника (MCP). Без этого блока адрес уходил бы в SPA и клиент
+	# получал бы index.html вместо протокола. flush_interval -1 — поток ответа идёт по SSE,
+	# буферизация превратила бы его в зависший запрос.
+	handle /mcp* {
+		reverse_proxy pmo-backend:8002 {
+			flush_interval -1
+		}
+	}
+
+	# OAuth для подключения помощника: метаданные, регистрация клиента, обмен кода.
+	# Разговаривает с ними программа-клиент, поэтому всё уходит на бэкенд. Страница согласия
+	# (/connect) сюда НЕ попадает — она часть SPA и обслуживается общим правилом ниже.
+	handle /.well-known/oauth-* {
+		reverse_proxy pmo-backend:8002
+	}
+	handle /oauth/* {
+		reverse_proxy pmo-backend:8002
+	}
+
+	# SPA: любой неизвестный путь отдаёт index.html (роутинг на клиенте).
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

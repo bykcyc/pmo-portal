@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+node_modules/
+dist/
+.vite/
+*.egg-info/
+.DS_Store
+.playwright-cli/
+output/
+artifacts/
+.claude/.claude/
+.claude/settings.local.json

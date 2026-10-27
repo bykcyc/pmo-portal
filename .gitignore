@@ -1,0 +1,40 @@
+# Корневой .gitignore PMO — защита от случайного коммита секретов/тяжёлого.
+# (Раньше его не было; реальные .env и так не были затрекан, но это defense-in-depth.)
+
+# Секреты — никогда не коммитим реальный .env (шаблоны *.env.example разрешены)
+.env
+*.env
+!*.env.example
+!*.env.prod.example
+
+# Зависимости и venvs
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Сборка
+dist/
+build/
+
+# Граф знаний graphify (регенерируется, тяжёлый)
+graphify-out/
+
+# Локальные данные/кэши
+RDProject/artifacts/
+.pytest_cache/
+tools/goldens/api-v1/
+# Визуальные эталоны Playwright: тяжёлые, привязаны к данным конкретного дева. Живут рядом
+# с раннером (C:\pw-runner\e2e\__screenshots__), в репозитории — только код спек.
+RDProject/frontend/e2e/__screenshots__/
+RDProject/frontend/test-results/
+RDProject/frontend/playwright-report/
+.claude/skills/.pmo-agent-skills-backups/
+
+# OS
+.DS_Store
+
+# Журналы отката миграций (runtime-артефакт с данными, не исходник)
+migrate_identity_*.json
+backfill_pm_id_*.json

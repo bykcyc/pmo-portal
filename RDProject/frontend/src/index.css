@@ -1,0 +1,881 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  /* Warm светлый: тёплый кремовый фон, белые карточки, графитовый текст —
+     тёплая палитра (жёлтый #F9D21D — акцент). */
+  --app-bg: #FAF8F3;        /* тёплый светлый фон всего приложения */
+  --app-surface: #ffffff;   /* плоские карточки/панели */
+  --app-border: #E6E4DF;    /* тёплые нейтральные бордеры */
+  --app-text: #2F3033;      /* графит */
+  --app-muted: #6E6F74;     /* 5.01:1 на белом — AA */
+
+  /* Кнопка primary (ui/button.tsx): жёлтая с графитовым текстом
+     (контраст ~9:1). Classic ниже возвращает синюю. */
+  --btn-primary-bg: #F9D21D;
+  --btn-primary-fg: #2F3033;
+  --btn-primary-hover: #EAC412;
+
+  /* Чарты (recharts принимает var() в fill/stroke) */
+  --chart-grid: #ECEAE3;
+  --chart-accent: #8A6D08;  /* золото, AA 4.92:1 с белым */
+
+  /* Шрифт семейства тем: Warm — тёплый Manrope (@fontsource, main.tsx),
+     Classic ниже возвращает исходный Inter/Segoe-стек. */
+  --font-sans: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+
+  /* ── Палитра темы (tailwind.config.js → rgb(var(--c-…) / alpha)) ─────────────
+     ГОЛЫЕ RGB-триплеты — hex внутри rgb(… / a) молча ломается. Палитра НЕ зависит
+     от light/dark: dark:-классы сами берут другие шейды того же рампа.
+     :root = Warm: slate И gray — один тёплый серо-графитовый рамп; blue —
+     золотой (400 = акцентный #F9D21D; 600 #8A6D08 — граница AA с белым текстом);
+     amber И yellow — стоковый оранжевый (различимость от золотого акцента).
+     400 тёплого рампа = #A4A5A9, НЕ исходный #9A9B9F: 339 юзаджей
+     dark:text-slate-400 на slate-800 требуют 4.5:1 (#9A9B9F даёт лишь 4.02).
+     .theme-classic ниже переопределяет всё на стоковые значения Tailwind. */
+  --c-slate-50: 250 248 243;
+  --c-slate-100: 246 244 236;
+  --c-slate-200: 236 234 227;
+  --c-slate-300: 203 201 194;
+  --c-slate-400: 164 165 169;
+  --c-slate-500: 110 111 116;
+  --c-slate-600: 84 86 90;
+  --c-slate-700: 63 64 69;
+  --c-slate-800: 58 59 64;
+  --c-slate-900: 47 48 51;
+  --c-slate-950: 36 37 40;
+
+  --c-gray-50: 250 248 243;
+  --c-gray-100: 246 244 236;
+  --c-gray-200: 236 234 227;
+  --c-gray-300: 203 201 194;
+  --c-gray-400: 164 165 169;
+  --c-gray-500: 110 111 116;
+  --c-gray-600: 84 86 90;
+  --c-gray-700: 63 64 69;
+  --c-gray-800: 58 59 64;
+  --c-gray-900: 47 48 51;
+  --c-gray-950: 36 37 40;
+
+  --c-blue-50: 253 250 232;
+  --c-blue-100: 250 243 201;
+  --c-blue-200: 245 233 160;
+  --c-blue-300: 244 223 96;
+  --c-blue-400: 249 210 29;
+  --c-blue-500: 154 124 16;
+  --c-blue-600: 138 109 8;
+  --c-blue-700: 111 86 6;
+  --c-blue-800: 87 67 5;
+  --c-blue-900: 51 48 27;
+  --c-blue-950: 38 36 15;
+
+  --c-amber-50: 255 247 237;
+  --c-amber-100: 255 237 213;
+  --c-amber-200: 254 215 170;
+  --c-amber-300: 253 186 116;
+  --c-amber-400: 251 146 60;
+  --c-amber-500: 249 115 22;
+  --c-amber-600: 234 88 12;
+  --c-amber-700: 194 65 12;
+  --c-amber-800: 154 52 18;
+  --c-amber-900: 124 45 18;
+  --c-amber-950: 67 20 7;
+
+  --c-yellow-50: 255 247 237;
+  --c-yellow-100: 255 237 213;
+  --c-yellow-200: 254 215 170;
+  --c-yellow-300: 253 186 116;
+  --c-yellow-400: 251 146 60;
+  --c-yellow-500: 249 115 22;
+  --c-yellow-600: 234 88 12;
+  --c-yellow-700: 194 65 12;
+  --c-yellow-800: 154 52 18;
+  --c-yellow-900: 124 45 18;
+  --c-yellow-950: 67 20 7;
+
+  --c-sky-50: 253 250 232;
+  --c-sky-100: 250 243 201;
+  --c-sky-200: 245 233 160;
+  --c-sky-300: 244 223 96;
+  --c-sky-400: 249 210 29;
+  --c-sky-500: 154 124 16;
+  --c-sky-600: 138 109 8;
+  --c-sky-700: 111 86 6;
+  --c-sky-800: 87 67 5;
+  --c-sky-900: 51 48 27;
+  --c-sky-950: 38 36 15;
+}
+
+.dark {
+  color-scheme: dark;
+  /* Warm тёмный: графитовые уровни тёплого рампа. Фон = 950 — рамп сжат
+     в тёмной части, и только так фон/карточка/бордер читаются тремя уровнями. */
+  --app-bg: #242528;        /* 950 */
+  --app-surface: #2F3033;   /* 900 — графит */
+  --app-border: #3F4045;    /* 700 */
+  --app-text: #ECEAE3;      /* 200 */
+  --app-muted: #A4A5A9;     /* 400 — 4.5:1 на 800 */
+
+  /* Жёлтая кнопка в тёмном — hover светлее, а не темнее */
+  --btn-primary-hover: #FBDC4B;
+
+  --chart-grid: #3F4045;
+  --chart-accent: #F9D21D;  /* яркое золото на графите (8.97:1) */
+}
+
+/* ── Classic (исходный вид портала) ─────────────────────────────────────────────
+   Включается классом theme-classic на <html> (uiStore.skin='classic'; boot-скрипт
+   index.html ставит его до React). Здесь ВСЕГДА стоковые значения Tailwind —
+   Classic обязан оставаться попиксельно как до введения тем. ПОРЯДОК БЛОКОВ
+   важен: у :root/.dark/.theme-classic равная специфичность (0,1,0), поэтому
+   .theme-classic идёт ПОСЛЕ .dark, а .theme-classic.dark (0,2,0) — последним. */
+.theme-classic {
+  --c-slate-50: 248 250 252;
+  --c-slate-100: 241 245 249;
+  --c-slate-200: 226 232 240;
+  --c-slate-300: 203 213 225;
+  --c-slate-400: 148 163 184;
+  --c-slate-500: 100 116 139;
+  --c-slate-600: 71 85 105;
+  --c-slate-700: 51 65 85;
+  --c-slate-800: 30 41 59;
+  --c-slate-900: 15 23 42;
+  --c-slate-950: 2 6 23;
+
+  --c-gray-50: 249 250 251;
+  --c-gray-100: 243 244 246;
+  --c-gray-200: 229 231 235;
+  --c-gray-300: 209 213 219;
+  --c-gray-400: 156 163 175;
+  --c-gray-500: 107 114 128;
+  --c-gray-600: 75 85 99;
+  --c-gray-700: 55 65 81;
+  --c-gray-800: 31 41 55;
+  --c-gray-900: 17 24 39;
+  --c-gray-950: 3 7 18;
+
+  --c-blue-50: 239 246 255;
+  --c-blue-100: 219 234 254;
+  --c-blue-200: 191 219 254;
+  --c-blue-300: 147 197 253;
+  --c-blue-400: 96 165 250;
+  --c-blue-500: 59 130 246;
+  --c-blue-600: 37 99 235;
+  --c-blue-700: 29 78 216;
+  --c-blue-800: 30 64 175;
+  --c-blue-900: 30 58 138;
+  --c-blue-950: 23 37 84;
+
+  --c-amber-50: 255 251 235;
+  --c-amber-100: 254 243 199;
+  --c-amber-200: 253 230 138;
+  --c-amber-300: 252 211 77;
+  --c-amber-400: 251 191 36;
+  --c-amber-500: 245 158 11;
+  --c-amber-600: 217 119 6;
+  --c-amber-700: 180 83 9;
+  --c-amber-800: 146 64 14;
+  --c-amber-900: 120 53 15;
+  --c-amber-950: 69 26 3;
+
+  --c-yellow-50: 254 252 232;
+  --c-yellow-100: 254 249 195;
+  --c-yellow-200: 254 240 138;
+  --c-yellow-300: 253 224 71;
+  --c-yellow-400: 250 204 21;
+  --c-yellow-500: 234 179 8;
+  --c-yellow-600: 202 138 4;
+  --c-yellow-700: 161 98 7;
+  --c-yellow-800: 133 77 14;
+  --c-yellow-900: 113 63 18;
+  --c-yellow-950: 66 32 6;
+
+  --c-sky-50: 240 249 255;
+  --c-sky-100: 224 242 254;
+  --c-sky-200: 186 230 253;
+  --c-sky-300: 125 211 252;
+  --c-sky-400: 56 189 248;
+  --c-sky-500: 14 165 233;
+  --c-sky-600: 2 132 199;
+  --c-sky-700: 3 105 161;
+  --c-sky-800: 7 89 133;
+  --c-sky-900: 12 74 110;
+  --c-sky-950: 8 47 73;
+
+  /* Classic light: исходные --app-* */
+  --app-bg: #f5f7fa;
+  --app-surface: #ffffff;
+  --app-border: #e6eaf0;
+  --app-text: #0f172a;
+  --app-muted: #64748b;
+
+  /* Кнопка primary Classic — как всегда была: синяя с белым текстом */
+  --btn-primary-bg: #2563eb;
+  --btn-primary-fg: #ffffff;
+  --btn-primary-hover: #1d4ed8;
+
+  /* Чарты Classic: исходные значения (grid и в тёмном оставался светлым — паритет) */
+  --chart-grid: #eef2f7;
+  --chart-accent: #2563eb;
+
+  /* Исходный шрифтовой стек Classic. Inter не установлен и не грузится — как и до тем,
+     фактически рендерит Segoe UI; менять это = сломать пиксельный паритет Classic. */
+  --font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Classic dark: семантические переменные тёмного Classic (палитра от режима не зависит).
+   Специфичность (0,2,0) — всегда побеждает и .dark, и .theme-classic. */
+.theme-classic.dark {
+  --app-bg: #0b1220;
+  --app-surface: #111827;
+  --app-border: #1f2937;
+  --app-text: #e5e7eb;
+  --app-muted: #94a3b8;
+  /* кнопка в Classic всегда была одинаковой в light/dark */
+  --btn-primary-hover: #1d4ed8;
+  --chart-grid: #eef2f7;
+  --chart-accent: #2563eb;
+}
+
+.dark ::selection {
+  background: rgba(148, 163, 184, 0.28);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* UX-10: единый видимый фокус для клавиатуры вместо разнородного браузерного
+   outline:auto. Компоненты со своим focus-visible:ring (напр. ui/button) сохраняют
+   его — их `focus:outline-none` перекрывает это правило по специфичности; всё
+   остальное получает согласованное кольцо. Видно только при навигации с клавиатуры. */
+:focus-visible {
+  outline: 2px solid rgb(var(--c-blue-600));   /* Classic: #2563eb; Warm: золото #8A6D08 */
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.dark :focus-visible {
+  outline-color: rgb(var(--c-blue-400));       /* Classic: #60a5fa; Warm: жёлтый #F9D21D */
+}
+
+::selection {
+  background: rgba(15, 23, 42, 0.14);
+}
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@media print {
+  /* Печать паспорта: показываем ТОЛЬКО [data-print-root], всё остальное скрыто.
+     Надёжнее точечного display:none — не печатается ни сайдбар, ни правая панель «Прогресс». */
+  body * {
+    visibility: hidden !important;
+  }
+  [data-print-root],
+  [data-print-root] * {
+    visibility: visible !important;
+  }
+  [data-print-root] {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  aside,
+  nav,
+  header,
+  footer,
+  .print-hide,
+  button,
+  [role="button"] {
+    display: none !important;
+  }
+
+  /* Поля-«окна» не разрезаем по границе страницы (жалоба: поля не помещались в окнах). */
+  [data-print-root] input,
+  [data-print-root] select,
+  [data-print-root] textarea,
+  [data-print-root] label,
+  [data-print-root] li,
+  [data-print-root] .rounded-lg,
+  [data-print-root] .rounded-md {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  /* инпуты/textarea в печати — авто-высота, чтобы длинный текст не обрезался рамкой */
+  [data-print-root] textarea,
+  [data-print-root] input {
+    height: auto !important;
+    min-height: 0 !important;
+    white-space: normal !important;
+    overflow: visible !important;
+  }
+  /* в печати не обрезаем длинные имена/значения многоточием — паспорт официальный документ */
+  [data-print-root] .truncate {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+  }
+
+  @page {
+    margin: 15mm 10mm;
+  }
+
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 10pt !important;
+  }
+
+  .shadow,
+  .shadow-sm,
+  .shadow-md,
+  .shadow-lg,
+  .shadow-xl {
+    box-shadow: none !important;
+  }
+
+  .rounded,
+  .rounded-lg,
+  .rounded-md,
+  .rounded-xl,
+  .rounded-full,
+  .rounded-sm {
+    border-radius: 0 !important;
+  }
+
+  [class*="bg-primary"],
+  [class*="bg-blue"],
+  [class*="bg-green"],
+  [class*="bg-red"],
+  [class*="bg-yellow"],
+  [class*="bg-orange"],
+  [class*="bg-gray"],
+  [class*="bg-purple"] {
+    background: white !important;
+  }
+
+  [class*="text-primary"],
+  [class*="text-blue"],
+  [class*="text-green"],
+  [class*="text-red"],
+  [class*="text-yellow"],
+  [class*="text-orange"],
+  [class*="text-purple"] {
+    color: black !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+
+  th,
+  td {
+    background: white !important;
+    border: 1px solid #555 !important;
+    color: black !important;
+    font-size: 9pt !important;
+    font-weight: normal !important;
+    padding: 3pt 5pt !important;
+  }
+
+  thead th {
+    background: #efefef !important;
+    font-weight: bold !important;
+  }
+
+  .border-2 {
+    border: 1.5pt solid #666 !important;
+    margin-bottom: 8pt !important;
+    padding: 6pt !important;
+    page-break-inside: avoid;
+  }
+
+  .border {
+    border: 1pt solid #aaa !important;
+  }
+
+  [class*="text-\\[10px\\]"],
+  [class*="uppercase"][class*="tracking"] {
+    color: #333 !important;
+    font-size: 8pt !important;
+    font-weight: bold !important;
+    letter-spacing: 0 !important;
+  }
+
+  span[class*="rounded"],
+  span[class*="px-"] {
+    background: none !important;
+    border: 0.5pt solid #777 !important;
+    color: black !important;
+    font-size: 8pt !important;
+    padding: 0 2pt !important;
+  }
+
+  .truncate {
+    overflow: visible !important;
+    text-overflow: unset !important;
+    white-space: normal !important;
+  }
+
+  .max-w-xs,
+  .max-w-sm,
+  [class*="max-w-"] {
+    max-width: none !important;
+  }
+}
+
+.gantt_container {
+  background-color: #ffffff !important;
+  border: none !important;
+  font-family: var(--font-sans) !important;
+}
+
+.gantt_grid_scale,
+.gantt_task_scale,
+.gantt_scale_row {
+  background-color: rgb(var(--c-slate-50)) !important;
+  border-bottom: 1px solid rgb(var(--c-slate-200)) !important;
+}
+
+.gantt_grid_head_cell {
+  border-right: 1px solid rgb(var(--c-slate-200)) !important;
+  color: rgb(var(--c-slate-500)) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  padding: 0 6px !important;
+  text-transform: uppercase !important;
+}
+
+.gantt_scale_cell {
+  border-right: 1px solid rgb(var(--c-slate-100)) !important;
+  color: rgb(var(--c-slate-500)) !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+}
+
+.gantt_grid_data,
+.gantt_task,
+.gantt_data_area,
+.gantt_task_bg {
+  background-color: #ffffff !important;
+}
+
+.gantt_row,
+.gantt_row.odd,
+.gantt_task_row,
+.gantt_task_row.odd {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid rgb(var(--c-slate-100)) !important;
+}
+
+.gantt_row:hover,
+.gantt_row.odd:hover,
+.gantt_task_row:hover,
+.gantt_task_row.odd:hover {
+  background-color: rgb(var(--c-slate-50)) !important;
+}
+
+.gantt_cell {
+  border-right: 1px solid rgb(var(--c-slate-50)) !important;
+  color: rgb(var(--c-slate-700)) !important;
+  font-size: 11px !important;
+  line-height: 28px !important;
+  padding: 0 4px !important;
+}
+
+.gantt_tree_content {
+  color: rgb(var(--c-slate-800)) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.gantt_task_cell {
+  border-right-color: rgb(var(--c-slate-100)) !important;
+}
+
+.gantt_task_line {
+  border: none !important;
+  border-radius: 4px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+}
+
+.gantt_task_content {
+  align-items: center !important;
+  color: #ffffff !important;
+  display: flex !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  justify-content: space-between !important;
+  overflow: hidden !important;
+  padding: 0 6px !important;
+  text-shadow: none !important;
+}
+
+.gantt-bar-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt-bar-pct {
+  flex-shrink: 0;
+  font-size: 9px;
+  margin-left: 4px;
+  opacity: 0.85;
+}
+
+.gantt_task_progress {
+  background-color: rgba(0, 0, 0, 0.18) !important;
+  border-radius: 4px 0 0 4px !important;
+}
+
+.gantt-task-completed .gantt_task_line,
+.gantt_task_line.gantt-task-completed {
+  background-color: #22c55e !important;
+  opacity: 0.7 !important;
+}
+
+.gantt-task-completed .gantt_task_content::after {
+  content: '\2713';
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.gantt-row-completed .gantt_cell,
+.gantt-row-completed .gantt_tree_content {
+  color: rgb(var(--c-slate-400)) !important;
+  text-decoration: line-through !important;
+}
+
+.gantt-task-cancelled .gantt_task_line,
+.gantt_task_line.gantt-task-cancelled {
+  background-color: rgb(var(--c-slate-400)) !important;
+  opacity: 0.4 !important;
+}
+
+.gantt-critical .gantt_task_line,
+.gantt_task_line.gantt-critical {
+  background-color: #f43f5e !important;
+  border: 2px solid #e11d48 !important;
+}
+
+.gantt-baseline-bar {
+  position: absolute;
+  height: 5px;
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 3px;
+}
+
+.dark .gantt-baseline-bar {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+.gantt_line_wrapper > div,
+.gantt_link_line {
+  background-color: rgb(var(--c-slate-400)) !important;
+}
+
+.gantt_link_arrow_right {
+  border-left-color: rgb(var(--c-slate-400)) !important;
+}
+
+.gantt_link_arrow_left {
+  border-right-color: rgb(var(--c-slate-400)) !important;
+}
+
+.gantt-today-marker,
+.gantt_marker.gantt-today-marker {
+  background-color: #ef4444 !important;
+  width: 2px !important;
+  z-index: 5 !important;
+}
+
+.gantt-today-marker .gantt_marker_content {
+  background: transparent !important;
+  color: #ef4444 !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  padding: 0 4px !important;
+}
+
+/* Своя вертикальная линия «Сегодня» (addMarker недоступен в Community).
+   Высота задаётся инлайн (полная высота контента) — top/height, без bottom. */
+.gantt-today-line {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  background: #ef4444;
+  z-index: 1;
+  pointer-events: none;
+}
+.gantt-today-line::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -3px;
+  border: 4px solid transparent;
+  border-top-color: #ef4444;
+}
+
+.gantt_resizer,
+.gantt_resizer_x {
+  background-color: rgb(var(--c-slate-200)) !important;
+  width: 3px !important;
+}
+
+.gantt_resizer:hover,
+.gantt_resizer_x:hover {
+  background-color: rgb(var(--c-blue-500)) !important;
+}
+
+.gantt_hor_scroll,
+.gantt_ver_scroll {
+  background-color: rgb(var(--c-slate-100)) !important;
+}
+
+/* height:14px — ТОЛЬКО горизонтальному скроллу. Раньше правило вешало высоту и на вертикальный:
+   он схлопывался в 13px «пенёк» наверху пустой белой колонки — прокрутить было невозможно. */
+.gantt_hor_scroll {
+  height: 14px !important;
+}
+
+/* Внутренние div — это распорки (spacer), а не ползунки: их не красим. Настоящие ползунки —
+   нативные webkit-скроллбары контейнеров ниже. */
+.gantt_hor_scroll div,
+.gantt_ver_scroll div {
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+.gantt_hor_scroll::-webkit-scrollbar,
+.gantt_ver_scroll::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+.gantt_hor_scroll::-webkit-scrollbar-track,
+.gantt_ver_scroll::-webkit-scrollbar-track {
+  background: rgb(var(--c-slate-100));
+}
+.gantt_hor_scroll::-webkit-scrollbar-thumb,
+.gantt_ver_scroll::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-slate-300));
+  border-radius: 7px;
+}
+.gantt_hor_scroll::-webkit-scrollbar-thumb:hover,
+.gantt_ver_scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--c-slate-400));
+}
+
+.gantt_wrapper .gantt_hor_scroll {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.gantt_tooltip {
+  background-color: #ffffff !important;
+  border: 1px solid rgb(var(--c-slate-200)) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  color: rgb(var(--c-slate-700)) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 11px !important;
+  padding: 6px 10px !important;
+}
+
+.gantt_tree_icon,
+.gantt_open,
+.gantt_close {
+  width: 16px !important;
+}
+
+.gantt_file,
+.gantt_folder_open,
+.gantt_folder_closed {
+  display: none !important;
+}
+
+/* ===== Тёмная тема для DHTMLX-Ганта (иначе остаётся белым островом) ===== */
+.dark .gantt_container {
+  background-color: rgb(var(--c-slate-900)) !important;
+}
+
+.dark .gantt_grid_scale,
+.dark .gantt_task_scale,
+.dark .gantt_scale_row {
+  background-color: rgb(var(--c-gray-900)) !important;
+  border-bottom-color: rgb(var(--c-gray-800)) !important;
+}
+
+.dark .gantt_grid_head_cell,
+.dark .gantt_scale_cell {
+  border-right-color: rgb(var(--c-gray-800)) !important;
+  color: rgb(var(--c-slate-400)) !important;
+}
+
+.dark .gantt_grid_data,
+.dark .gantt_task,
+.dark .gantt_data_area,
+.dark .gantt_task_bg {
+  background-color: rgb(var(--c-slate-900)) !important;
+}
+
+.dark .gantt_row,
+.dark .gantt_row.odd,
+.dark .gantt_task_row,
+.dark .gantt_task_row.odd {
+  background-color: rgb(var(--c-slate-900)) !important;
+  border-bottom-color: rgb(var(--c-gray-800)) !important;
+}
+
+.dark .gantt_row:hover,
+.dark .gantt_row.odd:hover,
+.dark .gantt_task_row:hover,
+.dark .gantt_task_row.odd:hover {
+  background-color: rgb(var(--c-slate-800)) !important;
+}
+
+.dark .gantt_cell {
+  border-right-color: rgb(var(--c-gray-800)) !important;
+  color: rgb(var(--c-slate-300)) !important;
+}
+
+.dark .gantt_tree_content {
+  color: rgb(var(--c-slate-200)) !important;
+}
+
+.dark .gantt_task_cell {
+  border-right-color: rgb(var(--c-gray-800)) !important;
+}
+
+.dark .gantt_tooltip {
+  background-color: rgb(var(--c-slate-800)) !important;
+  border-color: rgb(var(--c-slate-700)) !important;
+  color: rgb(var(--c-slate-200)) !important;
+}
+
+.dark .gantt_hor_scroll,
+.dark .gantt_ver_scroll {
+  background-color: rgb(var(--c-slate-800)) !important;
+}
+
+/* Филлеры над/под скроллбарами (углы разметки DHTMLX) — оставались белыми в тёмной теме */
+.dark .gantt_task_vscroll,
+.dark .gantt_grid_vscroll,
+.dark .gantt_layout_content {
+  background-color: transparent;
+}
+.dark .gantt_layout_content.gantt_task_vscroll,
+.dark .gantt_layout_content.gantt_grid_vscroll {
+  background-color: rgb(var(--c-slate-900)) !important;
+  border-color: rgb(var(--c-slate-700)) !important;
+}
+
+.dark .gantt_hor_scroll::-webkit-scrollbar-track,
+.dark .gantt_ver_scroll::-webkit-scrollbar-track {
+  background: rgb(var(--c-slate-800));
+}
+.dark .gantt_hor_scroll::-webkit-scrollbar-thumb,
+.dark .gantt_ver_scroll::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-slate-600));
+}
+.dark .gantt_hor_scroll::-webkit-scrollbar-thumb:hover,
+.dark .gantt_ver_scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--c-slate-500));
+}
+
+/* Тёмные системные скроллбары: в тёмной теме местами оставались белыми (color-scheme
+   не всегда перекрывает вложенные скроллеры в Chromium). */
+.dark ::-webkit-scrollbar { width: 12px; height: 12px; }
+.dark ::-webkit-scrollbar-track { background: var(--app-bg); }
+.dark ::-webkit-scrollbar-thumb { background: rgb(var(--c-slate-700)); border-radius: 6px; border: 2px solid var(--app-bg); }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-slate-600)); }
+.dark ::-webkit-scrollbar-corner { background: var(--app-bg); }
+/* scrollbar-hide должен остаться скрытым и в тёмной теме (перекрывает правила выше). */
+.dark .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Плотный режим таблиц (WBS): меньше воздуха и мельче кегль, чтобы на экран помещалось
+   примерно на треть больше строк. Именно правила, а не zoom: zoom мылит шрифт, ужимает
+   всё подряд и ломает липкие колонки. Включается атрибутом на обёртке таблицы. */
+[data-density="compact"] {
+  font-size: 11px;
+}
+/* На самой таблице висит класс text-xs (12px); селектор с атрибутом перебивает его
+   по специфичности, поэтому кегль меняется именно здесь, а не только у обёртки. */
+[data-density="compact"] table {
+  font-size: 11px;
+}
+/* Главный источник высоты строки — двухстрочный текст названия (line-clamp-2 с leading-5).
+   Ужимаем межстрочный интервал: он и даёт основную экономию, а не отступы ячейки. */
+[data-density="compact"] table .line-clamp-2 {
+  line-height: 0.95rem;
+}
+[data-density="compact"] table td,
+[data-density="compact"] table th {
+  padding-top: 1px;
+  padding-bottom: 1px;
+  line-height: 1.15rem;
+}
+/* Кнопки-иконки в строках: 36px рассчитаны на палец, в плотном режиме экономим высоту,
+   но не опускаемся ниже 28px — иначе в них перестаёт попадать мышь. */
+[data-density="compact"] table td button.inline-flex {
+  height: 1.75rem;
+  width: 1.75rem;
+}
+[data-density="compact"] table select,
+[data-density="compact"] table input {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Пункты разделов въезжают сбоку при смене категории проекта.
+   Без этого набор пунктов подменяется мгновенно, и человек не замечает, что они стали другими:
+   жалоба «быстро меняются, но непонятно, что открылись новые».
+   Только CSS: JS-анимацию Playwright не останавливает надёжно, и 102 визуальных снимка стали бы
+   недетерминированными. Системную настройку «уменьшить движение» уважаем — движения не будет. */
+@keyframes section-pill-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: none; }
+}
+.section-pill-in {
+  animation: section-pill-in 180ms ease-out backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .section-pill-in { animation: none; }
+}
