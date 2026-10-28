@@ -49,7 +49,7 @@ export interface Bitrix24TaskPayload {
   title: string
   description?: string | null
   responsible_id?: number | null
-  created_by_id?: number | null
+  // Постановщика (created_by_id) не шлём: сервер берёт его сам — РП проекта или того, кто создаёт.
   deadline?: string | null
 }
 

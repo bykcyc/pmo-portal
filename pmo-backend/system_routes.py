@@ -1,12 +1,12 @@
 """Health, readiness and metrics routes for the PMO API."""
 
 import hmac
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pmo_api import PmoApi
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import Response
 
 
@@ -18,14 +18,19 @@ def build_router(api: "PmoApi"):
         return {"status": "ok"}
 
     @router.get("/metrics")
-    async def metrics(token: Optional[str] = None):
+    async def metrics(authorization: str = Header(default="")):
         """Return the legacy Prometheus text exposition payload."""
         metrics_token = api.os.environ.get("METRICS_TOKEN")
         # Default-deny в production: без METRICS_TOKEN эндпоинт закрыт (не отдаём разведданные о
         # маршрутах/трафике анонимам). В dev/test (не production) поведение прежнее → голдены не тронуты.
         if api.os.environ.get("ADAPTER_ENV", "").lower() == "production" and not metrics_token:
             raise HTTPException(status_code=403, detail="Forbidden")
-        if metrics_token and not hmac.compare_digest(str(token or ""), metrics_token):
+        # Токен — только заголовком (`Authorization: Bearer …`, его умеет Prometheus). Прежний
+        # ?token= оседал в журналах доступа Caddy и uvicorn вместе со строкой запроса.
+        scheme, _, presented = authorization.partition(" ")
+        presented = presented.strip() if scheme.lower() == "bearer" else ""
+        # Байты, не str: compare_digest на str с не-ASCII бросает TypeError (был бы 500).
+        if metrics_token and not hmac.compare_digest(presented.encode(), metrics_token.encode()):
             raise HTTPException(status_code=403, detail="Forbidden")  # constant-time (как auth-токены)
 
         output = [

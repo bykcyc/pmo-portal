@@ -14,6 +14,7 @@ import sys
 import time
 import unicodedata
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from datetime import date, datetime, timedelta, timezone
@@ -70,6 +71,7 @@ logger = logging.getLogger("pmo-adapter")
 from fastapi import APIRouter, Body, Depends, FastAPI, File, Header, HTTPException, Request, UploadFile  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse, Response, StreamingResponse  # noqa: E402
+from starlette.requests import ClientDisconnect  # noqa: E402
 
 import mailer  # noqa: E402 — email-транспорт (dry-run outbox, если SMTP не настроен)
 import domain  # noqa: E402 — нужен как модуль: из него берутся значения порогов по умолчанию
@@ -229,9 +231,60 @@ _LOGIN_MAX = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "10") or 10)
 _LOGIN_WINDOW = 60.0
 # Прим.: глобальный login-счётчик убран (аудит-6b) — он был tenant-wide login-DoS (любой перебор
 # разными email держал общий счётчик на потолке → 429 всем, включая легитимных) и O(n²) на event-loop.
-# Защита от распределённого bcrypt-DoS — забота reverse proxy (per-IP rate-limit на краю, перед
-# приложением; в поставляемом deploy/Caddyfile его нет — см. DEPLOY.md, раздел 5); здесь только
-# per-email лимит ниже.
+# От перебора по многим email и bcrypt-DoS — per-IP лимит (_ip_rate_mw) и один поток bcrypt (_bcrypt).
+
+# --- per-IP лимит анонимных точек входа ---
+# Ключ — адрес клиента. uvicorn берёт его из X-Forwarded-For ТОЛЬКО от доверенного прокси
+# (FORWARDED_ALLOW_IPS в docker-compose.prod.yml), а Caddy присланный клиентом XFF не пропускает,
+# подставляя свой — подделать адрес снаружи нельзя. Непубличный адрес не считаем вовсе
+# (security.client_rate_key): иначе при неопознанном прокси все делили бы одно ведро.
+_IP_ATTEMPTS: dict = {}
+# ведро → (запросов, окно в сек). Вход — с запасом на офис, где многие выходят с одного адреса NAT (
+# с 2FA вход — два запроса); OAuth — коннекторы claude.ai ходят с общих адресов Anthropic.
+_IP_LIMITS = {"login": (30, 60.0), "oauth": (60, 60.0)}
+_IP_LIMIT_WARNED = False
+
+
+def _ip_bucket(path: str) -> Optional[str]:
+    if path in ("/auth/login", "/auth/login/totp"):
+        return "login"
+    if path.startswith(("/oauth/", "/.well-known/oauth-")):
+        return "oauth"
+    return None
+
+
+async def _ip_rate_ok(bucket: str, key: str) -> bool:
+    limit, window = _IP_LIMITS[bucket]
+    return await security_ops.rate_ok(
+        f"ip:{bucket}:{key}",
+        redis_client=_REDIS,
+        window=window,
+        max_attempts=limit,
+        fallback=lambda k: security_ops.login_rate_ok(k, _IP_ATTEMPTS, window=window, max_attempts=limit),
+        logger=logger,
+    )
+
+
+# --- bcrypt: один поток на весь процесс ---
+# Проверка cost-12 занимает ядро на ~0,25 с. Без потолка поток анонимных входов может занять все
+# ядра хоста, и встанет весь портал, а не только вход. Один поток ≈ 4 проверки в секунду —
+# с запасом для небольшой команды. Сверх очереди — сразу 429: ожидающие не копятся в памяти,
+# а человек получает понятный отказ вместо зависшего входа. Через _bcrypt идут ВСЕ проверки и
+# хеширования паролей, чтобы ни один путь не обходил потолок.
+_BCRYPT_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="bcrypt")
+_BCRYPT_QUEUE_MAX = 16
+_BCRYPT_PENDING = 0
+
+
+async def _bcrypt(fn, *args):
+    global _BCRYPT_PENDING
+    if _BCRYPT_PENDING >= _BCRYPT_QUEUE_MAX:
+        raise HTTPException(status_code=429, detail="Слишком много попыток входа, подождите минуту")
+    _BCRYPT_PENDING += 1
+    try:
+        return await asyncio.get_running_loop().run_in_executor(_BCRYPT_POOL, fn, *args)
+    finally:
+        _BCRYPT_PENDING -= 1
 
 # Отозванные токены (logout): сигнатура токена -> exp. In-memory (один воркер).
 _REVOKED: dict = {}
@@ -378,15 +431,21 @@ _JOB_FIREFLIES = 0x504D4F05   # связка Fireflies: раз в минуту, 
 
 
 async def _sweep_expired(*a, **k) -> Any:
-    """Уборка того, что живёт по таймеру: нерешённые черновики и брошенные запросы OAuth.
+    """Уборка того, что живёт по таймеру: нерешённые черновики, брошенные запросы OAuth и клиенты
+    OAuth, которые зарегистрировались и так и не подключились.
 
-    Едет вместе со снимком портфеля намеренно: заводить ради двух DELETE отдельную джобу
-    с отдельным локом — больше движущихся частей, чем пользы. Обе уборки идемпотентны.
+    Едет вместе со снимком портфеля намеренно: заводить ради нескольких DELETE отдельную джобу
+    с отдельным локом — больше движущихся частей, чем пользы. Все уборки идемпотентны.
     """
     now = datetime.now(timezone.utc)
     try:
         await db.delete_old_drafts((now - timedelta(days=drafts_routes.DRAFT_TTL_DAYS)).isoformat())
         await db.delete_expired_oauth(now.isoformat())
+        # После просроченных запросов и кодов: брошенная попытка уже не держит своего клиента.
+        gone = await db.delete_unused_oauth_clients(
+            (now - timedelta(days=oauth_provider.UNUSED_CLIENT_TTL_DAYS)).isoformat())
+        if gone:
+            logger.info("уборка: забыто клиентов OAuth без подключений — %s", gone)
     except Exception:  # noqa: BLE001 — уборка не должна ронять снимок портфеля
         logger.exception("уборка по сроку не удалась")
     return None
@@ -473,6 +532,16 @@ app.add_middleware(CORSMiddleware, allow_origins=_CORS_ORIGINS, allow_credential
                    allow_methods=["*"], allow_headers=["*"])
 
 
+@app.exception_handler(ClientDisconnect)
+async def _client_gone(request: Request, exc: ClientDisconnect):
+    """Клиент оборвал запрос посреди тела. Так выглядит и потолок request_body в Caddy: он рвёт
+    запрос к бэкенду, отдав клиенту 413. Отвечать уже некому, а необработанное исключение —
+    трассировка на сотню строк в журнале на КАЖДЫЙ такой запрос: анонимный поток больших тел
+    на /webhooks/* раздувал бы журнал без границы. Отвечаем пустым 400 и не шумим.
+    Обработчик — на приложении, а не в маршруте: тело регистрации OAuth читает код SDK."""
+    return Response(status_code=400)
+
+
 # ---------- observability: лёгкие in-memory метрики (Prometheus text, без внешних зависимостей) ----------
 _MX = {"count": {}, "sum": {}, "err": {}}  # per-worker (Prometheus скрейпит каждый воркер)
 
@@ -519,6 +588,26 @@ async def _twofa_gate_mw(request: Request, call_next):
                 u = USERS.get(data.get("sub"))
                 if u and u.get("is_active", True) and _twofa_must_enroll(u):
                     return JSONResponse(status_code=403, content={"detail": "twofa_setup_required"})
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def _ip_rate_mw(request: Request, call_next):
+    """Per-IP лимит на вход и OAuth — ДО обработчика, то есть до bcrypt и до записи в БД
+    (регистрация клиента OAuth анонимна и пишет строку на каждый запрос)."""
+    global _IP_LIMIT_WARNED
+    bucket = _ip_bucket(request.url.path)
+    if bucket and request.method != "OPTIONS":
+        host = request.client.host if request.client else None
+        key = security_ops.client_rate_key(host)
+        if key is None and _PROD and not _IP_LIMIT_WARNED:
+            _IP_LIMIT_WARNED = True
+            logger.warning("per-IP лимит не считается: адрес клиента %s не публичный — прокси не опознан "
+                           "(FORWARDED_ALLOW_IPS) или запрос пришёл по IPv6 через docker-proxy", host)
+        if key and not await _ip_rate_ok(bucket, key):
+            window = int(_IP_LIMITS[bucket][1])
+            return JSONResponse(status_code=429, headers={"Retry-After": str(window)},
+                                content={"detail": "Слишком много попыток входа, подождите минуту"})
     return await call_next(request)
 
 
@@ -1737,14 +1826,18 @@ async def _sync_bitrix_people() -> dict:
        НИКОГО не трогаем: иначе один таймаут превратился бы в массовое увольнение.
     2. **Не найден в Bitrix ≠ уволен.** Деактивируем только тех, у кого ЕСТЬ `bitrix24_id`.
        Люди, заведённые руками или приехавшие из Excel, в Bitrix отсутствуют по построению.
-    3. **`users` (логины) не трогаем вообще.** Автодеактивация логина — это лок-аут портала,
-       да ещё в обход админского гарда «нельзя снять последнего владельца».
+    3. **Логин уволенного гасим — осторожно** (`_offboard_departed_logins`). Раньше `users` не
+       трогали вовсе, и уволенный сохранял вход в портал и помощника. Теперь гасим, но только
+       по доверенному `users.bitrix24_user_id`, не последнего активного владельца, не больше
+       трёх за прогон (больше — сбой выгрузки, а не увольнение: только сообщаем) и не того,
+       кого владелец вернул руками. Обратно синк не включает никогда — это решение владельца.
     4. **Идемпотентность побайтово.** Пишем, только если поле реально изменилось: прежний
        импорт безусловно ставил `updated_at`, и ночная джоба каждую ночь двигала бы байты
        `/persons` — голден-гейт краснел бы навсегда.
     """
     rep = {"fetched": 0, "imported": 0, "updated": 0, "deactivated": 0, "reactivated": 0,
-           "linked": 0, "person_linked": 0, "bx_filled": 0, "complete": False, "error": ""}
+           "linked": 0, "person_linked": 0, "bx_filled": 0, "logins_deactivated": 0, "logins_held": 0,
+           "complete": False, "error": ""}
     if not _bitrix_url():
         rep["error"] = "Bitrix24 не настроен"
         return rep
@@ -1860,8 +1953,63 @@ async def _sync_bitrix_people() -> dict:
         # между нашим чтением и записью. Синк никого не удаляет (уволенных лишь гасит is_active).
         await db.upsert_persons(persons)
         _invalidate_people()
+    # Логины — по тому же правилу, что и люди: только после полного и непустого обхода.
+    if rep["complete"] and fetched:
+        await _offboard_departed_logins(fetched, rep)
     await _bx_log("people.sync", "error" if rep["error"] else "ok", rep["error"])
     return rep
+
+
+# Больше стольких уволенных за один прогон — это сбой выгрузки (сменились права вебхука, отдел
+# пропал из видимости), а не увольнение: никого не гасим, а сообщаем владельцу.
+_OFFBOARD_MAX_PER_RUN = 3
+
+
+async def _offboard_departed_logins(fetched: list, rep: dict) -> None:
+    """Погасить вход (и помощника) тем, кого больше нет среди активных в Bitrix.
+
+    Судим только по `users.bitrix24_user_id`: его ставит выгрузка Bitrix или владелец портала,
+    а не РП. По связке через persons/email — нельзя: человека с чужим email любой РП может
+    завести через POST /persons, и тогда синк «увольнял» бы чужой логин. Логин без Bitrix-id
+    (служебные и ручные учётки) синк не судит вовсе."""
+    alive = {str(b) for b in (_coerce_bitrix_id(u.get("ID")) for u in fetched) if b is not None}
+    gone, dirty = [], False
+    for email, u in USERS.items():
+        bx = u.get("bitrix24_user_id")
+        if bx is None:
+            continue
+        if str(bx) in alive:
+            # Вернулся в Bitrix — ручное «оставить вход», данное владельцем при увольнении,
+            # больше не нужно: если человек уйдёт снова, синк должен это заметить.
+            if "offboard_exempt_bx" in u:
+                u.pop("offboard_exempt_bx")
+                dirty = True
+            continue
+        if u.get("is_active", True) and u.get("offboard_exempt_bx") != bx:
+            gone.append((email, u))
+    if len(gone) > _OFFBOARD_MAX_PER_RUN:
+        rep["logins_held"] = len(gone)
+        gone = []
+        msg = (f"под отключение попало входов: {rep['logins_held']} — больше {_OFFBOARD_MAX_PER_RUN} "
+               "за раз похоже на сбой выгрузки, никого не отключили")
+        logger.warning("синк людей: %s", msg)
+        await _bx_log("people.offboard", "error", msg)
+    done = []
+    for email, u in gone:
+        if u.get("role") == "owner" and _count_owners(active_only=True) <= 1:
+            rep["logins_held"] += 1          # портал без активного владельца — лок-аут админки
+            continue
+        u["is_active"] = False
+        u["offboarded_at"] = _now_iso()
+        done.append(email)
+    if done or dirty:
+        await _save_users()
+    for email in done:
+        await _revoke_agent_access(email)
+    if done:
+        rep["logins_deactivated"] = len(done)
+        logger.warning("синк людей: отключены входы уволенных в Bitrix: %s", ", ".join(done))
+        await _bx_log("people.offboard", "ok", "отключены входы: " + ", ".join(done))
 
 
 async def sync_bitrix_people() -> dict:
@@ -2120,11 +2268,16 @@ def _admin_view(email: str, u: dict) -> dict:
     # null = ограничения нет (2FA уже включена либо человек ещё ни разу не входил).
     # Дата в прошлом = доступ к данным уже закрыт, пока он не подключит 2FA. Без этого поля
     # владелец не видел в списке, кто заблокирован: было только «есть 2FA / нет».
-    return {"id": u.get("id"), "email": email, "full_name": u.get("full_name"),
+    view = {"id": u.get("id"), "email": email, "full_name": u.get("full_name"),
             "role": u.get("role"), "bitrix24_user_id": u.get("bitrix24_user_id"),
             "is_active": u.get("is_active", True), "created_at": u.get("created_at"),
             "twofa_enabled": bool(u.get("twofa_enabled")),
             "twofa_grace_until": _twofa_grace_until_iso(u)}
+    # Когда синк людей погасил вход (человека нет среди активных в Bitrix). Поле разрежённое:
+    # у остальных учёток байты ответа прежние.
+    if u.get("offboarded_at"):
+        view["offboarded_at"] = u["offboarded_at"]
+    return view
 
 
 def _hash_pw(pw: str) -> str:
@@ -2155,6 +2308,15 @@ def _project_pm_bitrix_id(m: dict) -> Optional[int]:
         return None
     _, u = _find_user_by_id(pm_id)
     return _coerce_bitrix_id(u.get("bitrix24_user_id")) if u else None
+
+
+def _bitrix_creator_id(m: dict, user: dict) -> Optional[int]:
+    """Постановщик (CREATED_BY) задачи в Bitrix — только из доверенного: РП проекта, а если
+    у него нет id в Bitrix — тот, кто нажал (users.bitrix24_user_id — из выгрузки Bitrix или от
+    владельца портала). Из тела запроса не берём НИКОГДА: «постановщик» в Bitrix — это «кто
+    поручил», и раньше любой РП мог ставить задачи от имени любого сотрудника. Нет никого —
+    None, и Bitrix запишет владельца вебхука."""
+    return _project_pm_bitrix_id(m) or _coerce_bitrix_id(user.get("bitrix24_user_id"))
 
 
 def _validate_user_payload(p: dict, *, require_email: bool, require_password: bool):
@@ -3646,6 +3808,23 @@ async def issue_api_token(user: dict, name: str, scopes: str = "read+draft",
             "expires_at": (now + timedelta(days=security_ops.API_TOKEN_TTL_DAYS)).isoformat()}
 
 
+async def _revoke_agent_access(email: str) -> None:
+    """Погасить всё, чем помощник ходит от имени человека: сначала цепочки обновления (иначе
+    клиент тут же выписал бы себе новый доступ), затем сами токены — личные и выданные по OAuth.
+    Зовётся при смене пароля, деактивации, удалении и увольнении.
+
+    Best-effort, как и durable-отзыв токена входа: главное действие (пароль, учётка) уже
+    записано, и 500 после него только запутал бы. Доступ при сбое всё равно закрыт проверками
+    на каждом запросе — pw_changed_at и is_active в verify_api_token и при обновлении цепочки;
+    эта запись делает отзыв окончательным (без неё токены ожили бы при возврате учётки)."""
+    at = _now_iso()
+    try:
+        await db.revoke_refresh_chains_by_user(email, at)
+        await db.revoke_api_tokens_by_user(email, at)
+    except Exception:  # noqa: BLE001 - см. docstring: доступ уже закрыт проверками на запросе
+        logger.exception("не удалось погасить подключения помощника для %s", email)
+
+
 async def verify_api_token(token: str) -> Optional[dict]:
     """Кто пришёл с этим токеном, или None.
 
@@ -3666,6 +3845,10 @@ async def verify_api_token(token: str) -> Optional[dict]:
     email = rec.get("user_email")
     u = USERS.get(email)
     if not u or not u.get("is_active", True) or _twofa_must_enroll(u):
+        return None
+    # Смена пароля гасит и помощника: токен, выпущенный ДО неё, не принимаем, даже если строку
+    # почему-то не отозвали (тот же принцип, что у current_user для токенов входа).
+    if u.get("pw_changed_at") and security_ops.issued_before(rec.get("created_at"), u["pw_changed_at"]):
         return None
     await db.touch_api_token(rec["id"], _now_iso())
     return {"token_id": rec["id"], "scopes": rec.get("scopes") or "read",

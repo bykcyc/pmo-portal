@@ -86,7 +86,7 @@ export const assistantPage: WikiPage = {
       title: 'Step 2. Open a project',
       blocks: [
         { kind: 'p', text: 'The connection on its own shows the assistant no projects at all. That is deliberate: you open outward access yourself, one project at a time.' },
-        { kind: 'p', text: 'In the project click "Share" (the "More" menu in the header), go to the "Assistant (MCP)" tab and turn on "Open the project to the assistant". There is a single checkbox and it opens the whole project — budget, decisions and stakeholder assessments included. The neighbouring "Public link" tab is about something else entirely: a project page for people without an account.' },
+        { kind: 'p', text: 'In the project header click "Share", go to the "Assistant (MCP)" tab and turn on "Open the project to the assistant". There is a single checkbox and it opens the whole project — budget, decisions and stakeholder assessments included. The neighbouring "Public link" tab is about something else entirely: a project page for people without an account.' },
         { kind: 'p', text: 'The lock takes effect on the click — there is no need to press "Save"; the portal confirms with "Project opened to the assistant" or "Project closed to the assistant". The "Save" button in that dialog belongs to the public link and the section choice only.' },
         { kind: 'p', text: 'A project the assistant created itself is open to it right away — otherwise it could not finish filling in what it just created. You can close the access there at any time.' },
       ],
@@ -118,7 +118,7 @@ export const assistantPage: WikiPage = {
       id: 'privacy',
       title: 'What leaves the portal',
       blocks: [
-        { kind: 'p', text: 'When you ask the assistant about a project, the contents of the sections it reads go to the service you use — the same as if you pasted the text into a chat by hand. The difference is that here it is visible and controllable: the lock opens and closes a project only as a whole, and the portal owner sees the request log. There is no separate checkbox for the budget, decisions and stakeholder assessments: in an opened project every section is available to the assistant.' },
+        { kind: 'p', text: 'When you ask the assistant about a project, the contents of the sections it reads go to the service you use — the same as if you pasted the text into a chat by hand. The difference is that here it is visible and controllable: the lock opens and closes a project only as a whole, and the portal owner sees the request log. There is no separate checkbox for the budget, decisions and stakeholder assessments: in an opened project every section is available to the assistant, these included. The contents of attached files do not leave the portal — the assistant sees only a list of them with their names.' },
         {
           kind: 'note',
           tone: 'tip',

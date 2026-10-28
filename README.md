@@ -90,10 +90,11 @@ This repository is a sanitized snapshot of that work.
 
 | | |
 |---|---|
-| Backend tests | **721** pytest tests, pyright with 0 errors |
-| Frontend tests | **329** Vitest tests, TypeScript in strict mode |
+| Backend tests | **781** pytest tests, pyright with 0 errors |
+| Frontend tests | **332** Vitest tests, TypeScript in strict mode |
 | End-to-end | **18** Playwright specs — user flows, visual regression, accessibility; they run against a local development dataset that is not included, as are the visual baselines |
 | API contract | byte-level "golden" snapshots of API responses, compared before and after every refactor |
+| Security | per-IP and per-account login limits, a single bcrypt worker against CPU floods, assistant tokens revoked on password change, departed employees lose access, secrets redacted from access logs, body caps on every proxied route — see [SECURITY.md](pmo-backend/SECURITY.md) |
 | CI | GitHub Actions: type checks, unit tests, dependency audit, Docker image hardening |
 | AI workflow | [`AGENTS.md`](AGENTS.md) as the single source of guidance for any coding agent, portable skills in `.agents/skills`, multi-agent review |
 

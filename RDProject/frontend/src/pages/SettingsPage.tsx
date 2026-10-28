@@ -367,9 +367,16 @@ export default function SettingsPage() {
       // complete=false → Bitrix ответил не полностью (таймаут/лимит). Синк в этом случае
       // намеренно НИКОГО не деактивирует, и человек должен об этом узнать, а не думать,
       // что справочник актуален.
+      // Уволенным синк гасит и вход в портал — об этом владелец должен узнать здесь же, а не
+      // случайно в списке пользователей. Отложенные (слишком много за раз) — тоже.
+      const logins = [
+        r.logins_deactivated ? t('persons.importLoginsOff', { n: r.logins_deactivated }) : '',
+        r.logins_held ? t('persons.importLoginsHeld', { n: r.logins_held }) : '',
+      ].filter(Boolean).join(' ')
       setImportMsg(r.complete
-        ? t('persons.importSuccess', { imported: r.imported, updated: r.updated,
-                                       deactivated: r.deactivated, total_fetched: r.total_fetched })
+        ? [t('persons.importSuccess', { imported: r.imported, updated: r.updated,
+                                        deactivated: r.deactivated, total_fetched: r.total_fetched }),
+           logins].filter(Boolean).join(' ')
         : t('persons.importPartial', { total_fetched: r.total_fetched, error: r.error }))
       qc.invalidateQueries({ queryKey: ['persons'] })
     } catch (err: unknown) {

@@ -13,5 +13,11 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 from main import app  # noqa: E402  — импорт ПОСЛЕ load_dotenv, в этом весь смысл обёртки
+from security import install_access_log_redaction  # noqa: E402
+
+# Журнал доступа uvicorn пишет строку запроса целиком — с токеном публичной ссылки. Фильтр
+# ставим здесь, в точке входа сервера: uvicorn настраивает логирование ДО импорта приложения,
+# и повешенный после фильтр уже никто не снимет.
+install_access_log_redaction()
 
 __all__ = ["app"]

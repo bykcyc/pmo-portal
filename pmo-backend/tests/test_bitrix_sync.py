@@ -496,3 +496,250 @@ def test_bx_date_parses_without_timezone_shift():
     assert main._bx_date(None) is None
     assert main._bx_date("") is None
     assert main._bx_date("скоро") is None
+
+
+# ── 7. Вебхук открыт анонимам: тело — потоком, с потолком, ДО проверки токена ─────
+
+def test_webhook_refuses_declared_oversized_body(monkeypatch):
+    monkeypatch.setattr(main, "BITRIX_INBOUND_TOKEN", "tok")
+    r = client.post("/webhooks/bitrix24", content=b"a" * (bitrix_routes._MAX_WEBHOOK_BODY + 1),
+                    headers={"Content-Type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 413
+
+
+def test_webhook_stops_reading_a_chunked_flood_at_the_cap(monkeypatch):
+    """У chunked-запроса Content-Length нет. request.body() проглотил бы в память всё, что
+    пришлёт аноним, — и только потом сверил бы токен. Читаем потоком и бросаем на потолке."""
+    monkeypatch.setattr(main, "BITRIX_INBOUND_TOKEN", "tok")
+    pulled, sent = [], []
+    chunk = b"x" * 4096
+
+    async def receive():
+        pulled.append(1)
+        if len(pulled) > 1000:                 # 4 МБ предложено — столько читать нельзя
+            return {"type": "http.disconnect"}
+        return {"type": "http.request", "body": chunk, "more_body": True}
+
+    async def send(msg):
+        sent.append(msg)
+
+    scope = {"type": "http", "http_version": "1.1", "method": "POST", "path": "/webhooks/bitrix24",
+             "raw_path": b"/webhooks/bitrix24", "root_path": "", "scheme": "http", "query_string": b"",
+             "headers": [(b"content-type", b"application/x-www-form-urlencoded")],
+             "client": ("8.8.8.8", 1), "server": ("testserver", 80)}
+    asyncio.run(main.app(scope, receive, send))
+    status = next(m["status"] for m in sent if m["type"] == "http.response.start")
+    assert status == 413
+    assert len(pulled) < 40, f"прочитано {len(pulled)} кусков по 4 КиБ при потолке 64 КиБ"
+
+
+def test_webhook_non_ascii_token_is_refused_not_crashed(monkeypatch):
+    """hmac.compare_digest на str с не-ASCII бросает TypeError → был 500 вместо 403."""
+    monkeypatch.setattr(main, "BITRIX_INBOUND_TOKEN", "tok")
+    body = urllib.parse.urlencode({"event": "ONTASKUPDATE", "auth[application_token]": "токен"})
+    r = client.post("/webhooks/bitrix24", content=body,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 403
+
+
+# ── 8. Постановщик задачи в Bitrix — только из доверенного, не из тела запроса ────
+
+def _creator_of(monkeypatch, *, pm_bx, user_bx, route):
+    """Создать задачу в Bitrix от имени владельца портала и вернуть, кого сервер назвал
+    постановщиком. В теле запроса — чужой created_by_id: его брать нельзя НИКОГДА."""
+    created = []
+    meta = {"code": "PRJ-1", "pm_id": "pm-uid", "_backlog": [{"id": "b1", "title": "Бэклог"}]}
+
+    async def _create(code, title, desc, resp, deadline, created_by=None):
+        created.append(created_by)
+        return 4242
+
+    async def _load_meta(pid):
+        return {}, meta
+
+    async def _with_meta_retry(pid, fn):
+        return fn(meta)
+
+    monkeypatch.setattr(main, "_bitrix_url", lambda: "https://x/rest/1/t")
+    monkeypatch.setattr(main, "bx_create_task", _create)
+    monkeypatch.setattr(main, "load_meta", _load_meta)
+    monkeypatch.setattr(main, "with_meta_retry", _with_meta_retry)
+    monkeypatch.setattr(main, "_task_in_project", lambda tid, pid: _aret(True))
+    monkeypatch.setattr(main.db, "update_task", lambda tid, fields: _aret(None))
+    monkeypatch.setitem(main.USERS, "pm-x@example.com", {"id": "pm-uid", "role": "pm", "is_active": True,
+                                                    "full_name": "РП", "bitrix24_user_id": pm_bx})
+    monkeypatch.setitem(main.USERS, "owner@company.com",
+                        {**main.USERS["owner@company.com"], "bitrix24_user_id": user_bx})
+    h = {"Authorization": f"Bearer {main.make_token('owner@company.com')}"}
+    path = ("/projects/1/tasks/5/bitrix24-task" if route == "task"
+            else "/projects/1/backlog/b1/bitrix24-task")
+    r = client.post(path, headers=h, json={"title": "Задача", "responsible_id": 12, "created_by_id": 999})
+    assert r.status_code == 200, r.text
+    return created[0]
+
+
+def test_creator_is_the_project_pm_whatever_the_body_says(monkeypatch):
+    assert _creator_of(monkeypatch, pm_bx=77, user_bx=55, route="task") == 77
+    assert _creator_of(monkeypatch, pm_bx=77, user_bx=55, route="backlog") == 77
+
+
+def test_creator_falls_back_to_the_acting_user_not_the_body(monkeypatch):
+    """У РП нет id в Bitrix. Раньше тут брался created_by_id из тела — и любой РП ставил
+    задачи «от имени» любого сотрудника. Теперь постановщик — тот, кто нажал."""
+    assert _creator_of(monkeypatch, pm_bx=None, user_bx=55, route="task") == 55
+    assert _creator_of(monkeypatch, pm_bx=None, user_bx=55, route="backlog") == 55
+
+
+def test_creator_is_left_to_bitrix_when_nobody_is_known(monkeypatch):
+    assert _creator_of(monkeypatch, pm_bx=None, user_bx=None, route="task") is None
+    assert _creator_of(monkeypatch, pm_bx=None, user_bx=None, route="backlog") is None
+
+
+# ── 9. Уволенный в Bitrix теряет вход в портал и помощника ──────────────────────
+
+def _offboard(monkeypatch, users, alive, *, fail=False):
+    """Прогнать синк людей против выгрузки Bitrix с живыми `alive` и вернуть (отчёт,
+    кому погашены токены, сколько раз сохранили логины)."""
+    revoked, saved = [], []
+
+    async def _bx_call(method, payload=None):
+        if fail:
+            return None, "ConnectTimeout"
+        return {"result": [b if isinstance(b, dict) else {"ID": b, "NAME": f"N{b}", "LAST_NAME": "L"}
+                           for b in alive], "next": None}, ""
+
+    async def _revoke(email):
+        revoked.append(email)
+
+    monkeypatch.setattr(main, "_bitrix_url", lambda: "https://x/rest/1/t")
+    monkeypatch.setattr(main, "bx_call", _bx_call)
+    monkeypatch.setattr(main, "_load_persons", lambda: _aret([]))
+    monkeypatch.setattr(main.db, "upsert_persons", lambda ps: _aret(None))
+    monkeypatch.setattr(main, "_save_users", lambda: _aret(saved.append(1)))
+    monkeypatch.setattr(main, "_revoke_agent_access", _revoke)
+    monkeypatch.setattr(main, "_bx_log", lambda *a, **k: _aret(None))
+    monkeypatch.setattr(main, "USERS", users)
+    rep = asyncio.run(main._sync_bitrix_people())
+    return rep, revoked, saved
+
+
+def _login(bx, role="pm", **extra):
+    return {"id": f"u{bx}", "role": role, "is_active": True, "bitrix24_user_id": bx, **extra}
+
+
+def test_departed_login_loses_portal_and_assistant(monkeypatch):
+    users = {"gone@example.com": _login(2), "here@example.com": _login(1), "manual@example.com": _login(None)}
+    rep, revoked, saved = _offboard(monkeypatch, users, [1])
+    assert users["gone@example.com"]["is_active"] is False
+    assert users["gone@example.com"].get("offboarded_at"), "владелец должен видеть, почему вход выключен"
+    assert revoked == ["gone@example.com"], "токены и цепочки помощника обязаны погаснуть вместе со входом"
+    assert saved
+    assert rep["logins_deactivated"] == 1
+    assert users["here@example.com"]["is_active"] is True
+    assert users["manual@example.com"]["is_active"] is True, "логин без Bitrix-id синк не судит"
+
+
+def test_offboarding_needs_a_complete_crawl(monkeypatch):
+    users = {"gone@example.com": _login(2)}
+    _, revoked, _ = _offboard(monkeypatch, users, [1], fail=True)
+    assert users["gone@example.com"]["is_active"] is True and revoked == []
+    _, revoked, _ = _offboard(monkeypatch, users, [])          # «полный», но пустой ответ
+    assert users["gone@example.com"]["is_active"] is True and revoked == []
+
+
+def test_nameless_bitrix_user_is_still_alive(monkeypatch):
+    """Человека без имени синк в справочник не берёт, но он ЖИВ — вход ему не гасим."""
+    users = {"noname@example.com": _login(2)}
+    _offboard(monkeypatch, users, [1, {"ID": "2", "NAME": "", "LAST_NAME": ""}])
+    assert users["noname@example.com"]["is_active"] is True
+
+
+def test_last_active_owner_is_never_offboarded(monkeypatch):
+    users = {"boss@example.com": _login(2, role="owner")}
+    rep, revoked, _ = _offboard(monkeypatch, users, [1])
+    assert users["boss@example.com"]["is_active"] is True and revoked == []
+    assert rep["logins_held"] == 1
+    # а владелец, у которого есть живая замена, уходит как все
+    users = {"boss@example.com": _login(2, role="owner"), "boss2@example.com": _login(1, role="owner")}
+    _offboard(monkeypatch, users, [1])
+    assert users["boss@example.com"]["is_active"] is False
+
+
+def test_mass_departure_is_held_not_applied(monkeypatch):
+    """Выгрузка без ошибки, но без половины компании (сменились права вебхука) — это сбой,
+    а не увольнение. Больше трёх за прогон — не гасим никого, только сообщаем."""
+    users = {f"p{i}@example.com": _login(10 + i) for i in range(4)}
+    rep, revoked, saved = _offboard(monkeypatch, users, [1])
+    assert all(u["is_active"] for u in users.values())
+    assert revoked == [] and saved == []
+    assert rep["logins_held"] == 4 and rep["logins_deactivated"] == 0
+
+
+def test_owner_decision_beats_the_nightly_sync(monkeypatch):
+    """Владелец вернул вход руками (подрядчик, ошибка в Bitrix) — ночной синк не спорит."""
+    users = {"kept@example.com": _login(2, offboard_exempt_bx=2)}
+    _, revoked, saved = _offboard(monkeypatch, users, [1])
+    assert users["kept@example.com"]["is_active"] is True and revoked == [] and saved == []
+
+
+def test_exemption_ends_when_the_person_is_back_in_bitrix(monkeypatch):
+    users = {"back@example.com": _login(2, offboard_exempt_bx=2)}
+    _, _, saved = _offboard(monkeypatch, users, [1, 2])
+    assert "offboard_exempt_bx" not in users["back@example.com"] and saved
+
+
+def test_offboarding_is_idempotent(monkeypatch):
+    users = {"gone@example.com": _login(2)}
+    _offboard(monkeypatch, users, [1])
+    rep, revoked, saved = _offboard(monkeypatch, users, [1])
+    assert revoked == [] and saved == [] and rep["logins_deactivated"] == 0
+
+def test_import_button_reports_logins_it_turned_off(monkeypatch):
+    """Кнопка «Загрузить из Bitrix24» — тот же синк, что ночью. Отключённые и отложенные входы
+    обязаны доехать до сообщения: маршрут отдаёт отчёт по белому списку ключей."""
+    async def _sync():
+        return {"imported": 0, "updated": 0, "deactivated": 1, "reactivated": 0, "linked": 0,
+                "fetched": 5, "complete": True, "error": "", "logins_deactivated": 1, "logins_held": 2}
+
+    monkeypatch.setattr(main, "_bitrix_url", lambda: "https://x/rest/1/t")
+    monkeypatch.setattr(main, "sync_bitrix_people", _sync)
+    h = {"Authorization": f"Bearer {main.make_token('owner@company.com')}"}
+    data = client.post("/persons/import-bitrix24", headers=h).json()["data"]
+    assert (data["logins_deactivated"], data["logins_held"]) == (1, 2)
+
+
+# ── 10. Обрыв тела на потолке Caddy — не авария бэкенда ───────────────────────────
+
+def _post_then_disconnect(path, chunks=2):
+    """Как это выглядит за Caddy: тело течёт, на потолке request_body Caddy рвёт запрос к
+    бэкенду, и тот получает http.disconnect посреди тела. Вернуть код ответа (или None)."""
+    pulled, sent = [], []
+
+    async def receive():
+        pulled.append(1)
+        if len(pulled) > chunks:
+            return {"type": "http.disconnect"}
+        return {"type": "http.request", "body": b"a" * 1024, "more_body": True}
+
+    async def send(msg):
+        sent.append(msg)
+
+    scope = {"type": "http", "http_version": "1.1", "method": "POST", "path": path,
+             "raw_path": path.encode(), "root_path": "", "scheme": "http", "query_string": b"",
+             "headers": [(b"content-type", b"application/x-www-form-urlencoded")],
+             "client": ("8.8.8.8", 1), "server": ("testserver", 80)}
+    asyncio.run(main.app(scope, receive, send))   # не должен бросать наружу
+    return next((m["status"] for m in sent if m["type"] == "http.response.start"), None)
+
+
+def test_cut_off_webhook_body_is_not_an_unhandled_error(monkeypatch):
+    """Без перехвата каждый такой обрыв пишет в журнал трассировку на сотню строк. Вебхук открыт
+    анонимам и per-IP лимита не имеет — поток больших тел раздувал бы журнал без границы."""
+    monkeypatch.setattr(main, "BITRIX_INBOUND_TOKEN", "tok")
+    assert _post_then_disconnect("/webhooks/bitrix24") == 400
+
+
+def test_cut_off_oauth_registration_is_not_an_unhandled_error():
+    """Регистрация клиента — обработчик SDK, не наш: перехват обязан быть общим, на приложении."""
+    main._IP_ATTEMPTS.clear()
+    assert _post_then_disconnect("/oauth/register") == 400

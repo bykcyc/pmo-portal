@@ -86,7 +86,7 @@ export const assistantPage: WikiPage = {
       title: '2. solis. Atvērt projektu',
       blocks: [
         { kind: 'p', text: 'Pats pieslēgums palīgam nerāda nevienu projektu. Tas ir darīts apzināti: piekļuvi uz āru atverat jūs pats un pa vienam projektam.' },
-        { kind: 'p', text: 'Projektā nospiediet «Dalīties» (izvēlne «Vairāk» galvenē), atveriet cilni «Asistents (MCP)» un ieslēdziet «Atvērt projektu palīgam». Atzīme ir viena un atver projektu pilnībā — kopā ar budžetu, lēmumiem un ieinteresēto pušu vērtējumiem. Blakus cilne «Publiskā saite» ir par pavisam citu: projekta lapu tiem, kam nav portāla konta.' },
+        { kind: 'p', text: 'Projekta galvenē nospiediet «Kopīgot», atveriet cilni «Asistents (MCP)» un ieslēdziet «Atvērt projektu palīgam». Atzīme ir viena un atver projektu pilnībā — kopā ar budžetu, lēmumiem un ieinteresēto pušu vērtējumiem. Blakus cilne «Publiskā saite» ir par pavisam citu: projekta lapu tiem, kam nav portāla konta.' },
         { kind: 'p', text: 'Slēdzene nostrādā uzreiz pēc klikšķa — «Saglabāt» spiest nevajag, portāls apstiprinās: «Projekts atvērts palīgam» vai «Projekts slēgts palīgam». Poga «Saglabāt» šajā logā attiecas tikai uz publisko saiti un sadaļu izvēli.' },
         { kind: 'p', text: 'Projekts, kuru palīgs izveidojis pats, tam ir atvērts uzreiz — citādi tas nevarētu pabeigt aizpildīt to, ko tikko izveidoja. Piekļuvi turpat var slēgt jebkurā brīdī.' },
       ],
@@ -118,7 +118,7 @@ export const assistantPage: WikiPage = {
       id: 'privacy',
       title: 'Kas aiziet uz āru',
       blocks: [
-        { kind: 'p', text: 'Kad jūs jautājat palīgam par projektu, to sadaļu saturs, kuras tas lasa, aiziet uz to pakalpojumu, kuru izmantojat, — tāpat kā tad, ja tekstu ieliktu čatā ar rokām. Atšķirība ir tā, ka šeit tas ir redzams un pārvaldāms: slēdzene atver un aizver projektu tikai pilnībā, bet portāla vadītājs redz pieprasījumu žurnālu. Atsevišķas atzīmes budžetam, lēmumiem un ieinteresēto pušu vērtējumiem nav: atvērtā projektā palīgam ir pieejamas visas sadaļas.' },
+        { kind: 'p', text: 'Kad jūs jautājat palīgam par projektu, to sadaļu saturs, kuras tas lasa, aiziet uz to pakalpojumu, kuru izmantojat, — tāpat kā tad, ja tekstu ieliktu čatā ar rokām. Atšķirība ir tā, ka šeit tas ir redzams un pārvaldāms: slēdzene atver un aizver projektu tikai pilnībā, bet portāla vadītājs redz pieprasījumu žurnālu. Atsevišķas atzīmes budžetam, lēmumiem un ieinteresēto pušu vērtējumiem nav: atvērtā projektā palīgam ir pieejamas visas sadaļas, arī šīs. Pievienoto failu saturs uz āru neaiziet — palīgs redz tikai to sarakstu ar nosaukumiem.' },
         {
           kind: 'note',
           tone: 'tip',

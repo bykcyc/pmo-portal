@@ -30,4 +30,6 @@ export interface PersonImportResult {
   total_fetched: number
   complete: boolean     // false = Bitrix ответил не полностью; деактивации в этот раз не было
   error: string
+  logins_deactivated?: number  // входы уволенных, погашенные синком (вместе с помощником)
+  logins_held?: number         // попали под отключение, но не отключены: >3 за раз или последний владелец
 }

@@ -1498,6 +1498,28 @@ async def delete_expired_oauth(before_iso: str) -> None:
         await con.execute("DELETE FROM oauth_refresh_tokens WHERE chain_expires_at < $1", before_iso)
 
 
+async def delete_unused_oauth_clients(registered_before: str) -> int:
+    """Забыть клиентов, которые зарегистрировались раньше срока и так ни разу и не подключились.
+
+    Регистрация анонимна по стандарту, и без уборки таблица растёт с каждой чужой попыткой.
+    Уходит только клиент без единого следа: ни обмена кода (`last_used_at`), ни запроса
+    согласия (человек, может быть, как раз сейчас нажимает «Разрешить»), ни кода, ни цепочки
+    обновления, ни выданного доступа — даже отозванного: по нему «Отозвать» в Профиле и журнал
+    помощника. Одним запросом и идемпотентно: повтор ничего не находит."""
+    async with pool().acquire() as con:
+        res = await con.execute(
+            "DELETE FROM oauth_clients AS c WHERE c.created_at < $1 AND c.last_used_at IS NULL "
+            "AND NOT EXISTS (SELECT 1 FROM oauth_requests x WHERE x.client_id = c.client_id) "
+            "AND NOT EXISTS (SELECT 1 FROM oauth_codes x WHERE x.client_id = c.client_id) "
+            "AND NOT EXISTS (SELECT 1 FROM oauth_refresh_tokens x WHERE x.client_id = c.client_id) "
+            "AND NOT EXISTS (SELECT 1 FROM api_tokens x WHERE x.oauth_client_id = c.client_id)",
+            registered_before)
+    try:
+        return int(res.rsplit(" ", 1)[-1])
+    except ValueError:
+        return 0
+
+
 # ── refresh-цепочки помощника ────────────────────────────────────────────────────────────
 
 async def insert_oauth_refresh(token_hash: str, chain_id: str, client_id: str, user_email: str,
@@ -1579,6 +1601,20 @@ async def revoke_refresh_chains_by_user(email: str, at: str) -> int:
                     "UPDATE oauth_refresh_tokens SET revoked_at = $1 WHERE chain_id = $2 AND revoked_at IS NULL",
                     at, chain)
     return len(chains)
+
+
+async def revoke_api_tokens_by_user(email: str, at: str) -> int:
+    """Все живые токены человека разом — и личные из Профиля, и выданные по OAuth. Смена
+    пароля, деактивация и увольнение обязаны закрывать и помощника: иначе доступ к проектам
+    переживает и то, и другое (токен живёт 90 дней)."""
+    async with pool().acquire() as con:
+        res = await con.execute(
+            "UPDATE api_tokens SET revoked_at = $1 WHERE lower(user_email) = lower($2) AND revoked_at IS NULL",
+            at, email)
+    try:
+        return int(res.split()[-1])
+    except (ValueError, IndexError):
+        return 0
 
 
 async def revoke_api_token_by_hash(token_hash: str, at: str) -> bool:

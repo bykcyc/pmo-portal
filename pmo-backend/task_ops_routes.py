@@ -68,9 +68,9 @@ def build_router(api: "PmoApi"):
         _, m0 = await api.load_meta(pid)
         code = m0.get("code") or "PRJ"
         resp = payload.get("responsible_id") or await api.bx_find_user(payload.get("assignee_email")) or api.BITRIX_DEFAULT_RESP
-        # Постановщик = РП (надёжно через pm_id → users.bitrix24_user_id); фронтовый created_by_id —
-        # запасной путь. Ответственный (resp) остаётся исполнителем задачи.
-        created_by = api._project_pm_bitrix_id(m0) or payload.get("created_by_id")
+        # Постановщик = РП (см. _bitrix_creator_id); присланный клиентом created_by_id не берём.
+        # Ответственный (resp) остаётся исполнителем задачи.
+        created_by = api._bitrix_creator_id(m0, user)
         bid = await api.bx_create_task(code, payload.get("title") or "Задача", payload.get("description"),
                                        resp, payload.get("deadline"), created_by)
         if not bid:

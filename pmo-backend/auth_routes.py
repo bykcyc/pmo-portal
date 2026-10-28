@@ -1,6 +1,5 @@
 """Authentication routes built against the stable ``main`` compatibility facade."""
 
-import asyncio
 import time
 from typing import TYPE_CHECKING
 
@@ -24,12 +23,13 @@ def build_router(api: "PmoApi"):
             )
         password = payload.get("password") or ""
         user = api.USERS.get(email)
+        # Обе ветки — через общий поток bcrypt (api._bcrypt): там потолок на CPU и очередь.
         if user and user.get("is_active", True):
-            password_ok = await asyncio.to_thread(api._verify_password, user, password)
+            password_ok = await api._bcrypt(api._verify_password, user, password)
         else:
             # Unknown or deactivated account: still spend one bcrypt verify so the
             # response time does not reveal whether the email exists / is active.
-            await asyncio.to_thread(api._dummy_verify, password)
+            await api._bcrypt(api._dummy_verify, password)
             password_ok = False
         if not password_ok:
             raise HTTPException(status_code=401, detail="Invalid credentials")

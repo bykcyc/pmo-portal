@@ -64,6 +64,25 @@ services:
       FIREFLIES_ALLOWED_PROJECTS: ${FIREFLIES_ALLOWED_PROJECTS:-}
       FIREFLIES_ALLOWED_HOSTS: ${FIREFLIES_ALLOWED_HOSTS:-}
       FIREFLIES_EXTRA_BITRIX_USERS: ${FIREFLIES_EXTRA_BITRIX_USERS:-}
+      # /api/metrics в production закрыт, пока токен не задан (см. DEPLOY.md).
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      # Адрес клиента для per-IP лимита входа и OAuth: uvicorn берёт его из X-Forwarded-For
+      # ТОЛЬКО от этих адресов — сетей compose, где живёт Caddy (а Caddy присланный клиентом
+      # XFF не пропускает, подставляет свой). Порт 8002 наружу не публикуется, поэтому чужих
+      # в этих сетях нет. Опубликуете порт — сузьте список до адреса Caddy, иначе адрес
+      # клиента станет подделываемым. Без переменной все запросы видны с адреса Caddy, и
+      # per-IP лимит молча выключается (в журнале бэкенда — «per-IP лимит не считается»).
+      FORWARDED_ALLOW_IPS: "172.16.0.0/12,192.168.0.0/16,10.0.0.0/8"
+    # Потолок памяти (обычный расход ~100 МБ): утечка или поток тяжёлых запросов роняет только
+    # бэкенд — его поднимет restart, — а не базу и Caddy на том же хосте.
+    mem_limit: 1g
+    # Журнал контейнера (строки доступа uvicorn, ошибки) — с ротацией: json-file по умолчанию
+    # растёт без предела, и поток анонимных запросов мог бы заполнить диск хоста.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
 
   caddy:
@@ -84,6 +103,12 @@ services:
       - caddy_data:/data          # сертификаты Let's Encrypt — не терять при пересборке
       - caddy_config:/config
       - caddy_logs:/var/log/caddy
+    # Журнал доступа Caddy пишет в файл с ротацией (Caddyfile); здесь — его stdout-журнал.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
 
 volumes:

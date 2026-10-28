@@ -162,13 +162,14 @@ def test_chunked_body_without_content_length_is_capped_while_reading(wired):
     assert r.status_code == 413
 
 
-def test_caddy_caps_fireflies_webhook_without_touching_bitrix():
+def test_caddy_caps_fireflies_webhook_in_its_own_block():
+    # Свой блок с потолком у Fireflies; общий /webhooks/* (вебхук Bitrix) с усилением защиты тоже
+    # получил потолок — это стережёт test_every_proxied_route_has_a_body_cap.
     from pathlib import Path
     caddy = (Path(__file__).resolve().parents[2] / "deploy" / "Caddyfile").read_text(encoding="utf-8")
+    assert caddy.index("handle /webhooks/fireflies {") < caddy.index("handle /webhooks/* {")
     block = caddy.split("handle /webhooks/fireflies {", 1)[1].split("reverse_proxy", 1)[0]
     assert "max_size 64KB" in block
-    general = caddy.split("handle /webhooks/* {", 1)[1].split("reverse_proxy", 1)[0]
-    assert "max_size" not in general
 
 
 # ── ручки владельца портала ──────────────────────────────────────────────────

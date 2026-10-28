@@ -3,6 +3,51 @@ import type { NewsItem } from '../types'
 /** The Russian set defines the order and the list of entries (see content/news/ru). */
 export const NEWS: NewsItem[] = [
   {
+    id: '2026-10-28-access-hardening',
+    date: '2026-10-28',
+    title: 'Changing your password now disconnects the assistant too',
+    summary: 'After a password change, connect the assistant again. The creator of a Bitrix24 task is always the project manager. An employee who has left in Bitrix24 loses portal sign-in automatically.',
+    blocks: [
+      { kind: 'p', text: 'Three changes about access. Each one closes a case where the portal treated access as closed while it stayed open — or where a task reached people from someone who never set it.' },
+      {
+        kind: 'steps',
+        items: [
+          {
+            title: 'A new password means a new assistant connection',
+            text: 'People change their password when they fear it has leaked. Until now a password change ended browser sessions, but the assistant connection (Claude, ChatGPT) kept working for up to 90 days. Now it is revoked too. After changing your password, connect the assistant again: the connector in Claude or ChatGPT will ask you to confirm access once more, and a manual token can be issued in “Profile → Assistant connection”. The same happens when the portfolio manager changes your password.',
+          },
+          {
+            title: 'The Bitrix24 creator is the project manager',
+            text: 'In the “Create task in Bitrix24” window the “Creator” field can no longer be chosen. It is the project manager, or you if they are not in Bitrix24. Before, any employee could be picked there, and the task reached people “from” someone who never set it.',
+          },
+          {
+            title: 'People who leave lose sign-in automatically',
+            text: 'When an employee is deactivated in Bitrix24, the nightly people sync also turns off their portal sign-in and assistant connections. In “Settings → Users” such an account is marked “Left (Bitrix24)”. If access is still needed (a contractor, a mistake in Bitrix24), the portfolio manager ticks “Active” — and the sync leaves that account alone from then on.',
+          },
+        ],
+      },
+      {
+        kind: 'note',
+        tone: 'info',
+        text: 'The sync does not apply more than three “departures” in one night: that looks like a broken export from Bitrix24, not people leaving. In that case nobody is switched off, and an entry appears in the Bitrix24 sync log. The sync never switches off the last active portfolio manager.',
+      },
+    ],
+  },
+  {
+    id: '2026-10-28-assistant-sees-whole-project',
+    date: '2026-10-28',
+    title: 'The assistant sees an opened project in full — the help now says so plainly',
+    summary: 'The "Open the project to the assistant" checkbox opens the whole project, budget, decisions and stakeholder assessments included. The help promised a second checkbox that keeps money and people assessments in the portal — there is none, and the text is fixed.',
+    blocks: [
+      { kind: 'p', text: 'The help page "Connecting an assistant" said that a separate checkbox keeps the assistant away from the budget and stakeholder assessments. There is no such checkbox: "Open the project to the assistant" opens the project as a whole, and everything the assistant reads from it goes to the service you use. Only the contents of attached files stay behind — the assistant sees just a list of them. The help now describes this as it is.' },
+      {
+        kind: 'note',
+        tone: 'tip',
+        text: 'Check which projects are open: "Share" in the project header → the "Assistant (MCP)" tab. Keep open only those whose data your organisation’s policy allows you to share with the AI service you use. Unticking the checkbox closes access at once.',
+      },
+    ],
+  },
+  {
     id: '2026-09-30-honest-rag',
     date: '2026-09-30',
     title: 'Project colour has become more honest',

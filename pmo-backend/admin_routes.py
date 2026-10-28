@@ -43,7 +43,7 @@ def build_router(api: "PmoApi"):
         # Человека проверяем ДО любой записи: иначе 404/409 оставили бы половину пользователя.
         pid = str(payload.get("person_id") or "").strip()
         person = await api._find_linkable_person(pid) if pid else None
-        password_hash = await asyncio.to_thread(api._hash_pw, str(payload["password"]))
+        password_hash = await api._bcrypt(api._hash_pw, str(payload["password"]))
         rec = {
             "id": str(uuid.uuid4()),
             "email": email,
@@ -101,10 +101,14 @@ def build_router(api: "PmoApi"):
                 raise HTTPException(status_code=409, detail="Нельзя деактивировать последнего владельца")
             u["is_active"] = bool(payload["is_active"])
             if not u["is_active"]:
-                # Деактивация обязана гасить и подключения помощника: доступ уже отсекается
-                # проверкой при каждом запросе, но живая цепочка воскресила бы его молча
-                # в тот же миг, когда учётку вернут.
-                await api.db.revoke_refresh_chains_by_user(email, api._now_iso())
+                # Деактивация обязана гасить и помощника: доступ уже отсекается проверкой при
+                # каждом запросе, но живая цепочка или личный токен воскресли бы молча в тот же
+                # миг, когда учётку вернут.
+                await api._revoke_agent_access(email)
+            elif u.pop("offboarded_at", None):
+                # Владелец вернул вход, который погасил синк людей (человека нет среди активных
+                # в Bitrix): это его решение, и ночной синк не должен гасить вход снова.
+                u["offboard_exempt_bx"] = u.get("bitrix24_user_id")
         if new_email != email:
             u["email"] = new_email
             api.USERS[new_email] = u
@@ -123,10 +127,11 @@ def build_router(api: "PmoApi"):
         npw = str(payload.get("new_password") or "")
         if len(npw) < 8:
             raise HTTPException(status_code=422, detail="Пароль минимум 8 символов")
-        u["password_hash"] = await asyncio.to_thread(api._hash_pw, npw)
+        u["password_hash"] = await api._bcrypt(api._hash_pw, npw)
         u.pop("password", None)  # убрать плейнтекст-фолбэк, если был
         api._stamp_pw_change(u)  # отозвать прежние токены пользователя
         await api._save_users()
+        await api._revoke_agent_access(email)  # и помощника: у него свои токены, не из входа
         return {"ok": True}
 
     @router.delete("/admin/users/{uid}")
@@ -142,6 +147,9 @@ def build_router(api: "PmoApi"):
             raise HTTPException(status_code=409, detail="Нельзя удалить последнего владельца")
         del api.USERS[email]
         await api._save_users()
+        # Токены помощника хранят email, а не id: новый логин с тем же адресом иначе получил
+        # бы чужие живые подключения.
+        await api._revoke_agent_access(email)
         api.logger.info("admin: удалён пользователь %s", email)
         return {"ok": True}
 
@@ -192,16 +200,19 @@ def build_router(api: "PmoApi"):
         _rk = f"pw:{user['email']}"
         if not await api._rate_ok(_rk):
             raise HTTPException(status_code=429, detail="Слишком много попыток, подождите минуту")
-        if not await asyncio.to_thread(api._verify_password, u, str(payload.get("current_password") or "")):
+        if not await api._bcrypt(api._verify_password, u, str(payload.get("current_password") or "")):
             raise HTTPException(status_code=403, detail="Текущий пароль неверный")
         api._LOGIN_ATTEMPTS.pop(_rk, None)  # верный текущий пароль — сброс счётчика
         npw = str(payload.get("new_password") or "")
         if len(npw) < 8:
             raise HTTPException(status_code=422, detail="Пароль минимум 8 символов")
-        u["password_hash"] = await asyncio.to_thread(api._hash_pw, npw)
+        u["password_hash"] = await api._bcrypt(api._hash_pw, npw)
         u.pop("password", None)
         api._stamp_pw_change(u)  # смена своего пароля отзывает прежние сессии (в т.ч. текущую)
         await api._save_users()
+        # …и подключения помощника: пароль меняют, когда боятся утечки, а токен помощника
+        # живёт 90 дней и паролем не проверяется.
+        await api._revoke_agent_access(user["email"])
         return {"ok": True}
 
     # ---------- self-service: двухфакторная аутентификация (TOTP) ----------
@@ -237,7 +248,7 @@ def build_router(api: "PmoApi"):
             raise HTTPException(status_code=429, detail="Слишком много неверных кодов, попробуйте позже")
         if not await api._rate_ok(rk):
             raise HTTPException(status_code=429, detail="Слишком много попыток, подождите минуту")
-        if not await asyncio.to_thread(api._verify_password, u, str(payload.get("password") or "")):
+        if not await api._bcrypt(api._verify_password, u, str(payload.get("password") or "")):
             raise HTTPException(status_code=403, detail="Пароль неверный")
         pending = api._decrypt_secret(u.get("twofa_pending_secret") or "")
         if not pending:
@@ -262,7 +273,7 @@ def build_router(api: "PmoApi"):
         rk = f"pw:{user['email']}"  # переиспользуем пароль-лимит (проверяем именно пароль)
         if not await api._rate_ok(rk):
             raise HTTPException(status_code=429, detail="Слишком много попыток, подождите минуту")
-        if not await asyncio.to_thread(api._verify_password, u, str(payload.get("password") or "")):
+        if not await api._bcrypt(api._verify_password, u, str(payload.get("password") or "")):
             raise HTTPException(status_code=403, detail="Пароль неверный")
         api._LOGIN_ATTEMPTS.pop(rk, None)
         for k in ("twofa_secret", "twofa_pending_secret", "twofa_enabled", "twofa_enrolled_at"):

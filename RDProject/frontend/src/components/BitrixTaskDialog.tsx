@@ -26,7 +26,6 @@ export interface BitrixTaskDialogProps {
     title: string
     description: string | null
     responsible_id: number | null
-    created_by_id: number | null
     deadline: string | null
   }) => Promise<void>
   onDeleteTask: () => Promise<void>
@@ -47,7 +46,10 @@ export default function BitrixTaskDialog({
   // Название задачи → в НАЗВАНИЕ Bitrix (раньше поле было пустым, а имя уезжало в описание).
   const [title, setTitle] = useState(prefill.title || '')
   const [description, setDescription] = useState(prefill.description || '')
-  const [creatorName, setCreatorName] = useState(prefill.pmName || '')
+  // Постановщика назначает сервер: руководитель проекта, а без его id в Bitrix24 — тот, кто
+  // создаёт задачу. Выбирать здесь нельзя: иначе задача приходила бы людям «от» сотрудника,
+  // который её не ставил. Поле только показывает, кто это будет.
+  const creatorName = prefill.pmName || ''
   const [responsibleName, setResponsibleName] = useState(prefill.assigneeName || '')
   const [deadline, setDeadline] = useState(prefill.deadline || '')
   const [saving, setSaving] = useState(false)
@@ -74,7 +76,6 @@ export default function BitrixTaskDialog({
         title: title.trim(),
         description: description.trim() || null,
         responsible_id: responsibleId,
-        created_by_id: creatorId,
         deadline: deadline || null,
       })
       onClose()
@@ -178,29 +179,15 @@ export default function BitrixTaskDialog({
                       </span>
                     )}
                   </div>
-                ) : creatorName && !creatorPerson ? (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50 dark:bg-red-950/40 rounded-md border border-red-200 dark:border-red-900">
-                      <span className="text-sm text-gray-600 dark:text-slate-300 truncate flex-1">{creatorName}</span>
-                      <span className="flex items-center gap-0.5 text-xs text-red-600 dark:text-red-300 shrink-0">
-                        <AlertTriangle size={11} /> {t('bitrix24Task.noPersonInBitrix')}
-                      </span>
-                    </div>
-                    <PersonPicker
-                      value={creatorName}
-                      onChange={setCreatorName}
-                      placeholder={t('bitrix24Task.creator') + '…'}
-                      className="w-full text-sm border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
+                ) : creatorName ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50 dark:bg-red-950/40 rounded-md border border-red-200 dark:border-red-900">
+                    <span className="text-sm text-gray-600 dark:text-slate-300 truncate flex-1">{creatorName}</span>
+                    <span className="flex items-center gap-0.5 text-xs text-red-600 dark:text-red-300 shrink-0">
+                      <AlertTriangle size={11} /> {t('bitrix24Task.noPersonInBitrix')}
+                    </span>
                   </div>
-                ) : (
-                  <PersonPicker
-                    value={creatorName}
-                    onChange={setCreatorName}
-                    placeholder={t('bitrix24Task.creator') + '…'}
-                    className="w-full text-sm border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                )}
+                ) : null}
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{t('bitrix24Task.creatorRule')}</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">{t('bitrix24Task.responsible')}</label>

@@ -26,6 +26,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 BX_STATUS_TO_OURS = {"2": "not_started", "3": "in_progress", "4": "completed", "5": "completed", "6": "on_hold"}
 _BL_STATUS = {"not_started": "new", "in_progress": "in_progress", "completed": "done", "cancelled": "cancelled"}
 
+# Настоящее тело исходящего вебхука Bitrix — десяток коротких полей формы (~1 КиБ).
+# 64 КиБ — с запасом, но не склад: вебхук открыт анонимам. Caddy режет там же.
+_MAX_WEBHOOK_BODY = 64 * 1024
+
 
 def build_router(api: "PmoApi"):
     router = APIRouter()
@@ -40,7 +44,7 @@ def build_router(api: "PmoApi"):
         if not item:
             raise HTTPException(status_code=404, detail="Backlog item not found")
         resp = payload.get("responsible_id") or api.BITRIX_DEFAULT_RESP
-        created_by = api._project_pm_bitrix_id(m0) or payload.get("created_by_id")  # постановщик = РП
+        created_by = api._bitrix_creator_id(m0, user)  # постановщик = РП; из тела — никогда
         b = await api.bx_create_task(code, payload.get("title") or item.get("title") or "Бэклог",
                                      payload.get("description") or item.get("description"),
                                      resp, payload.get("deadline"), created_by)
@@ -186,13 +190,25 @@ def build_router(api: "PmoApi"):
 
     @router.post("/webhooks/bitrix24")
     async def bitrix_webhook(request: Request):
-        raw = (await request.body()).decode("utf-8", "ignore")
+        # Токен лежит В ТЕЛЕ формы, поэтому тело приходится прочесть до проверки. Читаем потоком
+        # с потолком: у chunked-запроса Content-Length нет, и request.body() проглотил бы в память
+        # всё, что пришлёт аноним, — и только потом выяснилось бы, что токен чужой.
+        declared = request.headers.get("content-length") or ""
+        if declared.isdigit() and int(declared) > _MAX_WEBHOOK_BODY:
+            raise HTTPException(status_code=413, detail="Payload too large")
+        buf = bytearray()
+        async for chunk in request.stream():
+            buf += chunk
+            if len(buf) > _MAX_WEBHOOK_BODY:
+                raise HTTPException(status_code=413, detail="Payload too large")
+        raw = bytes(buf).decode("utf-8", "ignore")
         form = {k: (v[0] if v else "") for k, v in urllib.parse.parse_qs(raw).items()}
         # Опциональная проверка подписи: если задан BITRIX24_INBOUND_TOKEN, вебхук обязан его прислать
         # (Bitrix кладёт application_token в исходящий вебхук). Пусто = проверка выключена (как раньше).
         if api.BITRIX_INBOUND_TOKEN:
             tok = form.get("auth[application_token]") or form.get("application_token") or ""
-            if not hmac.compare_digest(tok, api.BITRIX_INBOUND_TOKEN):
+            # Байты, не str: compare_digest на str с не-ASCII бросает TypeError (был 500 вместо 403).
+            if not hmac.compare_digest(tok.encode(), str(api.BITRIX_INBOUND_TOKEN).encode()):
                 raise HTTPException(status_code=403, detail="Invalid webhook token")
         try:
             if form.get("event", "") not in ("ONTASKUPDATE", "ONTASKADD"):

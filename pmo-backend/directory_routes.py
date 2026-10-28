@@ -97,7 +97,10 @@ def build_router(api: "PmoApi"):
         return {"data": {"imported": rep.get("imported", 0), "updated": rep.get("updated", 0),
                          "deactivated": rep.get("deactivated", 0), "reactivated": rep.get("reactivated", 0),
                          "linked": rep.get("linked", 0), "total_fetched": rep.get("fetched", 0),
-                         "complete": rep.get("complete", False), "error": rep.get("error", "")}}
+                         "complete": rep.get("complete", False), "error": rep.get("error", ""),
+                         # Синк гасит и входы уволенных — сообщение кнопки должно это назвать.
+                         "logins_deactivated": rep.get("logins_deactivated", 0),
+                         "logins_held": rep.get("logins_held", 0)}}
 
     return (router, users, persons_list, persons_create, persons_update,
             persons_delete, persons_delete_all, persons_import_bitrix)

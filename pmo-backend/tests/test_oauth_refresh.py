@@ -7,6 +7,7 @@
   3) refresh принимается как обычный токен доступа к /mcp.
 """
 import asyncio
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 
@@ -191,6 +192,31 @@ def test_disabled_account_kills_chain_but_2fa_grace_does_not():
     except oauth_provider.TokenError:
         pass
     assert not any(r["revoked_at"] for r in db2.refresh.values()), "грейс 2FA не должен рушить подключение"
+
+
+def test_password_change_kills_the_chain():
+    """Пароль меняют, когда боятся утечки. Значение refresh, выданное ДО смены, доступ не
+    продлевает, даже если цепочку почему-то не погасили (второй рубеж к _revoke_agent_access)."""
+    prov, api, db = _provider()
+    raw = _seed_chain(prov, db, api)
+    loaded = asyncio.run(prov.load_refresh_token(cast(Any, _Client()), raw))
+    api._user["pw_changed_at"] = time.time() + 5
+    try:
+        asyncio.run(prov.exchange_refresh_token(cast(Any, _Client()), cast(Any, loaded), ["read"]))
+        raise AssertionError("значение, выданное до смены пароля, не должно обновляться")
+    except oauth_provider.TokenError as exc:
+        assert exc.error == "invalid_grant"
+    assert all(r["revoked_at"] for r in db.refresh.values()), "цепочка должна быть погашена"
+    assert api.issued == 0
+
+
+def test_chain_started_after_password_change_still_renews():
+    prov, api, db = _provider()
+    api._user["pw_changed_at"] = time.time() - 60
+    raw = _seed_chain(prov, db, api)
+    loaded = asyncio.run(prov.load_refresh_token(cast(Any, _Client()), raw))
+    out = asyncio.run(prov.exchange_refresh_token(cast(Any, _Client()), cast(Any, loaded), ["read"]))
+    assert out.access_token
 
 
 def test_chain_ceiling_stops_endless_renewal():

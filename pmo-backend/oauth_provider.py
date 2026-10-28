@@ -50,6 +50,8 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import AnyUrl
 
+import security
+
 # Сколько человек может думать над страницей согласия. Меньше — и он не успеет войти в портал
 # и пройти двухфакторку; больше — и забытая вкладка остаётся заряженной слишком долго.
 REQUEST_TTL_MINUTES = 15
@@ -61,6 +63,13 @@ CODE_TTL_SECONDS = 120
 # часто человек подтверждает доступ ЗАНОВО: ротация продлевает доступ, но не бесконечно.
 REFRESH_TTL_DAYS = 90
 REFRESH_CHAIN_DAYS = 365
+
+# Сколько помнить клиента, который зарегистрировался и так и не подключился. Регистрация
+# анонимна (RFC 7591): без срока каждая чужая попытка — строка навсегда. Честному клиенту
+# хватает минут (регистрация → согласие → обмен кода); вернувшийся позже со старой регистрацией
+# получит «Client ID not found», и регистрироваться ему придётся заново. Клиент с любым следом
+# подключения не уходит никогда — правило в `db.delete_unused_oauth_clients`.
+UNUSED_CLIENT_TTL_DAYS = 1
 
 # Права, которые вообще бывают у помощника. `read` — читать открытые проекты,
 # `draft` — предлагать изменения черновиком. Ничего, что меняет доступ, тут нет и быть не может.
@@ -278,6 +287,12 @@ class PortalOAuthProvider:
             # Деактивированная учётка — цепочку гасим: иначе доступ воскреснет при её возврате.
             await self._api.db.revoke_oauth_chain(chain_id, now_iso)
             raise TokenError(error="invalid_grant", error_description="Учётная запись недоступна")
+        if user.get("pw_changed_at") and security.issued_before(row.get("created_at"), user["pw_changed_at"]):
+            # Значение выдано ДО смены пароля. Смена пароля гасит цепочки сама
+            # (_revoke_agent_access); это второй рубеж, если та запись не дошла до базы.
+            await self._api.db.revoke_oauth_chain(chain_id, now_iso)
+            raise TokenError(error="invalid_grant",
+                             error_description="Пароль сменён — подтвердите доступ заново")
         if self._api._twofa_must_enroll(user):
             # Грейс 2FA — состояние ВРЕМЕННОЕ: цепочку не рушим, человек включит 2FA и клиент
             # восстановится сам, без повторного согласия.

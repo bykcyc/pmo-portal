@@ -1337,7 +1337,8 @@
     "noB24Id": "Bitrix24 ID not found",
     "noPersonInBitrix": "No person in Bitrix",
     "open": "Open task",
-    "notSent": "Not sent to Bitrix (use the Bitrix24 button in the task row)"
+    "notSent": "Not sent to Bitrix (use the Bitrix24 button in the task row)",
+    "creatorRule": "The creator is the project manager, or you if they are not in Bitrix24."
   },
   "meetings": {
     "title": "Meetings",
@@ -1959,7 +1960,9 @@
       "createLogin": "Create portal user",
       "needEmail": "An email is required — add one for this person",
       "hasLogin": "Account already exists",
-      "roleExec": "Company leadership"
+      "roleExec": "Company leadership",
+      "offboarded": "Left (Bitrix24)",
+      "offboardedHint": "Sign-in was turned off by the people sync on {{date}}: the employee is no longer active in Bitrix24. Assistant connections were revoked too. If access is still needed, tick “Active” — the sync will leave this account alone from then on."
     },
     "rag": {
       "title": "RAG thresholds",
@@ -2017,7 +2020,9 @@
     "importPartial": "Bitrix24 replied partially ({{total_fetched}} fetched): {{error}}. The directory was topped up, but leavers were NOT deactivated — retry later.",
     "showingFirst": "Showing first {{shown}}. {{hidden}} more — refine your search.",
     "hidden": "Hidden",
-    "hiddenHint": "Hide from people pickers (technical accounts). Stays visible in this directory."
+    "hiddenHint": "Hide from people pickers (technical accounts). Stays visible in this directory.",
+    "importLoginsOff": "Sign-in turned off for departed employees: {{n}} — see “Users”.",
+    "importLoginsHeld": "Sign-in not turned off ({{n}}): too many at once, or it is the last portfolio manager — see the Bitrix24 sync log."
   },
   "sidebar": {
     "collapse": "Collapse sidebar",

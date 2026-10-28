@@ -3,6 +3,51 @@ import type { NewsItem } from '../types'
 /** Sastāvu un secību nosaka krievu kopa (skat. content/news/ru). */
 export const NEWS: NewsItem[] = [
   {
+    id: '2026-10-28-access-hardening',
+    date: '2026-10-28',
+    title: 'Paroles maiņa atvieno arī palīgu',
+    summary: 'Pēc paroles maiņas palīgs jāpieslēdz no jauna. Uzdevuma izveidotājs Bitrix24 vienmēr ir projekta vadītājs. Bitrix24 atlaists darbinieks pats zaudē pieteikšanos portālā.',
+    blocks: [
+      { kind: 'p', text: 'Trīs izmaiņas par piekļuvi. Katra novērš gadījumu, kad portāls uzskatīja piekļuvi par slēgtu, bet tā palika atvērta, — vai kad uzdevums nonāca pie cilvēkiem ne no tā, kurš to deva.' },
+      {
+        kind: 'steps',
+        items: [
+          {
+            title: 'Jauna parole — jauna palīga pieslēgšana',
+            text: 'Paroli maina, kad baidās, ka tā ir noplūdusi. Agrāk paroles maiņa beidza sesijas pārlūkā, bet palīga pieslēgums (Claude, ChatGPT) turpināja darboties līdz 90 dienām. Tagad tiek atsaukts arī tas. Pēc paroles maiņas pieslēdziet palīgu no jauna: konektors Claude vai ChatGPT palūgs vēlreiz apstiprināt piekļuvi, bet manuālo pilnvaru izsniedziet sadaļā «Profils → Palīga pieslēgšana». Tas pats notiek, ja paroli jums nomaina portfeļa vadītājs.',
+          },
+          {
+            title: 'Izveidotājs Bitrix24 — projekta vadītājs',
+            text: 'Logā «Izveidot uzdevumu Bitrix24» lauku «Izveidotājs» vairs nevar izvēlēties. Par to kļūst projekta vadītājs, bet, ja viņa nav Bitrix24, — jūs. Agrāk tur varēja norādīt jebkuru darbinieku, un uzdevums nonāca pie cilvēkiem «no viņa», lai gan viņš to nebija devis.',
+          },
+          {
+            title: 'Atlaists darbinieks pats zaudē pieteikšanos',
+            text: 'Kad darbinieku atslēdz Bitrix24, nakts cilvēku sinhronizācija izslēdz arī viņa pieteikšanos portālā un palīga pieslēgumus. Sadaļā «Iestatījumi → Lietotāji» šādam kontam ir atzīme «Atlaists (Bitrix24)». Ja piekļuve joprojām vajadzīga (apakšuzņēmējs, kļūda Bitrix24), portfeļa vadītājs atzīmē «Aktīvs» — un sinhronizācija šo kontu vairs neaiztiek.',
+          },
+        ],
+      },
+      {
+        kind: 'note',
+        tone: 'info',
+        text: 'Vairāk nekā trīs «atlaišanas» vienā naktī sinhronizācija nepiemēro: tā izskatās kļūme datu izgūšanā no Bitrix24, nevis cilvēku aiziešana. Tad nevienu neatslēdz, bet Bitrix24 sinhronizācijas žurnālā parādās ieraksts. Pēdējo aktīvo portfeļa vadītāju sinhronizācija neatslēdz nekad.',
+      },
+    ],
+  },
+  {
+    id: '2026-10-28-assistant-sees-whole-project',
+    date: '2026-10-28',
+    title: 'Palīgs atvērtu projektu redz pilnībā — palīdzība to tagad saka tieši',
+    summary: 'Atzīme «Atvērt projektu palīgam» atver visu projektu — kopā ar budžetu, lēmumiem un ieinteresēto pušu vērtējumiem. Palīdzība solīja otru atzīmi, kas naudu un cilvēku vērtējumus atstāj portālā, — tādas nav, teksts izlabots.',
+    blocks: [
+      { kind: 'p', text: 'Palīdzībā «Kā pieslēgt palīgu» bija rakstīts, ka atsevišķa atzīme nelaiž palīgu pie budžeta un ieinteresēto pušu vērtējumiem. Tādas atzīmes nav: «Atvērt projektu palīgam» atver projektu pilnībā, un viss, ko palīgs no tā izlasa, aiziet uz pakalpojumu, kuru izmantojat. Neaiziet tikai pievienoto failu saturs — palīgs redz vien to sarakstu. Palīdzība tagad to apraksta tā, kā ir.' },
+      {
+        kind: 'note',
+        tone: 'tip',
+        text: 'Pārbaudiet, kuriem projektiem piekļuve ir atvērta: «Kopīgot» projekta galvenē → cilne «Asistents (MCP)». Atstājiet atvērtus tikai tos, kuru datus jūsu organizācijas politika ļauj nodot izvēlētajam MI pakalpojumam. Noņemta atzīme piekļuvi aizver uzreiz.',
+      },
+    ],
+  },
+  {
     id: '2026-09-30-honest-rag',
     date: '2026-09-30',
     title: 'Projekta krāsa kļuvusi godīgāka',

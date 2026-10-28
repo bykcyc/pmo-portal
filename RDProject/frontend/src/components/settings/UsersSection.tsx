@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { TFunction } from 'i18next'
 import { Shield, Plus, Trash2, Pencil, Check, X, Key, ShieldOff } from 'lucide-react'
 import type { AdminUser } from '@/api/users'
+import { formatDate } from '@/utils/date'
 
 type AddUserState = { email: string; password: string; full_name: string; role: string; bitrix24_user_id: string }
 type EditUserState = { id: string; email: string; full_name: string; role: string; bitrix24_user_id: string; is_active: boolean }
@@ -163,6 +164,14 @@ export default function UsersSection({
                             title={t('twofa.blockedHint')}
                           >
                             {t('twofa.blocked')}
+                          </span>
+                        )}
+                        {u.offboarded_at && (
+                          <span
+                            className="ml-1.5 rounded bg-rose-100 px-1.5 py-0.5 text-xs font-medium text-rose-800 dark:bg-rose-950/50 dark:text-rose-200"
+                            title={t('settings.users.offboardedHint', { date: formatDate(u.offboarded_at) })}
+                          >
+                            {t('settings.users.offboarded')}
                           </span>
                         )}
                       </td>

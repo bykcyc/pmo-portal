@@ -9,12 +9,15 @@ import base64
 import hashlib
 import hmac
 import io
+import ipaddress
 import json
 import logging
+import re
 import secrets
 import time
 import uuid
 from collections.abc import Callable, Mapping, MutableMapping
+from datetime import datetime
 from typing import Any, Optional
 
 import bcrypt
@@ -108,6 +111,67 @@ def login_rate_ok(
     recent.append(current)
     attempts[email] = recent
     return len(recent) <= max_attempts
+
+
+def client_rate_key(host: Optional[str]) -> Optional[str]:
+    """Ключ per-IP лимита по адресу клиента, или None — «адрес не считаем».
+
+    None для всего непубличного (приватные сети, loopback, «testclient»): такой адрес значит,
+    что uvicorn не опознал прокси (или IPv6 пришёл через docker-proxy), и тогда ВСЕ запросы
+    приходят с одного адреса Caddy. Одно ведро на всех — это общий лок-аут входа, его уже
+    убирали (аудит-6b); лучше не считать вовсе. IPv6 считаем по /64: абоненту обычно выдают
+    всю подсеть, и по одиночному адресу лимит обходился бы перебором адресов.
+    """
+    try:
+        ip = ipaddress.ip_address(str(host or ""))
+    except ValueError:
+        return None
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    if not ip.is_global:
+        return None
+    if ip.version == 6:
+        return str(ipaddress.ip_network(f"{ip}/64", strict=False))
+    return str(ip)
+
+
+# Секреты, которые живут прямо в адресе: токен публичной ссылки (путь /public/<токен> и
+# ?share=<токен> на каждом запросе публичной страницы) и старый ?token= метрик. Тот же шаблон
+# стоит в фильтре журнала Caddy (deploy/Caddyfile) — меняя один, меняйте и другой.
+_SECRET_IN_URL = re.compile(r"(/public/)[^/?#]+|([?&](?:share|token)=)[^&#]*")
+
+
+def redact_url(url: str) -> str:
+    """Строка запроса для журнала — без токенов доступа."""
+    return _SECRET_IN_URL.sub(lambda m: (m.group(1) or m.group(2)) + "REDACTED", url)
+
+
+class RedactAccessLog(logging.Filter):
+    """Фильтр журнала доступа uvicorn: путь запроса уходит в лог без токенов.
+
+    uvicorn пишет строку запроса аргументом записи ('%s - "%s %s HTTP/%s" %d'); правим все
+    строковые аргументы, а не позицию — адрес клиента и метод шаблону не соответствуют."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(redact_url(a) if isinstance(a, str) else a for a in record.args)
+        return True
+
+
+def install_access_log_redaction(logger_name: str = "uvicorn.access") -> None:
+    """Повесить RedactAccessLog на журнал доступа (повторный вызов ничего не удваивает)."""
+    target = logging.getLogger(logger_name)
+    if not any(isinstance(f, RedactAccessLog) for f in target.filters):
+        target.addFilter(RedactAccessLog())
+
+
+def issued_before(issued_iso: Any, epoch: Any) -> bool:
+    """Выпущен ли токен (ISO-время выпуска) раньше момента epoch — например, смены пароля.
+    Нечитаемую дату считаем старой: отказ безопаснее, чем пропуск."""
+    try:
+        return datetime.fromisoformat(str(issued_iso)).timestamp() < float(epoch)
+    except (TypeError, ValueError):
+        return True
 
 
 async def revoke_token(

@@ -1337,7 +1337,8 @@
     "noB24Id": "Bitrix24 ID nav atrasts",
     "noPersonInBitrix": "Nav personas Bitrix",
     "open": "Atvērt uzdevumu",
-    "notSent": "Nav nosūtīts uz Bitrix (poga Bitrix24 uzdevuma rindā)"
+    "notSent": "Nav nosūtīts uz Bitrix (poga Bitrix24 uzdevuma rindā)",
+    "creatorRule": "Izveidotājs ir projekta vadītājs, bet, ja viņa nav Bitrix24, — jūs."
   },
   "meetings": {
     "title": "Sanāksmes",
@@ -1954,7 +1955,9 @@
       "createLogin": "Izveidot portāla lietotāju",
       "needEmail": "Nepieciešams e-pasts — pievienojiet to personai",
       "hasLogin": "Konts jau pastāv",
-      "roleExec": "Uzņēmuma vadība"
+      "roleExec": "Uzņēmuma vadība",
+      "offboarded": "Atlaists (Bitrix24)",
+      "offboardedHint": "Pieteikšanos {{date}} izslēdza cilvēku sinhronizācija: Bitrix24 darbinieks vairs nav aktīvs. Arī palīga savienojumi ir atsaukti. Ja piekļuve joprojām vajadzīga, atzīmējiet «Aktīvs» — sinhronizācija šo kontu vairs neaiztiks."
     },
     "requestFailed": "Pieprasījums neizdevās",
     "requiredEnvVars": "Obligātie .env mainīgie:",
@@ -2018,7 +2021,9 @@
     "importPartial": "Bitrix24 atbildēja nepilnīgi (saņemti {{total_fetched}}): {{error}}. Katalogs papildināts, bet aizgājēji NAV deaktivizēti — mēģiniet vēlāk.",
     "showingFirst": "Rādīti pirmie {{shown}}. Vēl {{hidden}} — precizējiet meklēšanu.",
     "hidden": "Paslēpts",
-    "hiddenHint": "Nerādīt personu izvēles sarakstos (tehniskie konti). Direktorijā paliek redzams."
+    "hiddenHint": "Nerādīt personu izvēles sarakstos (tehniskie konti). Direktorijā paliek redzams.",
+    "importLoginsOff": "Izslēgta atlaisto darbinieku pieteikšanās: {{n}} — skatiet «Lietotāji».",
+    "importLoginsHeld": "Pieteikšanās nav izslēgta ({{n}}): pārāk daudz uzreiz vai tas ir pēdējais portfeļa vadītājs — skatiet Bitrix24 sinhronizācijas žurnālu."
   },
   "sidebar": {
     "collapse": "Sakļaut izvēlni",

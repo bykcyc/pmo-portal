@@ -2959,8 +2959,10 @@ def test_metrics_open_by_default(monkeypatch):
 def test_metrics_token_gate(monkeypatch):
     monkeypatch.setenv("METRICS_TOKEN", "s3cret")
     assert client.get("/metrics").status_code == 403            # нет токена
-    assert client.get("/metrics", params={"token": "wrong"}).status_code == 403
-    assert client.get("/metrics", params={"token": "s3cret"}).status_code == 200
+    assert client.get("/metrics", headers={"Authorization": "Bearer wrong"}).status_code == 403
+    # Токен — только заголовком: из строки запроса он оседал в журналах доступа.
+    assert client.get("/metrics", params={"token": "s3cret"}).status_code == 403
+    assert client.get("/metrics", headers={"Authorization": "Bearer s3cret"}).status_code == 200
 
 
 # ---------- Recurring встречи: даты шага weekly +7/+14/+21, без протокола ----------
