@@ -22,10 +22,10 @@ plus an MCP server, so assistants like Claude can read the portfolio and *propos
 
 I'm an IT project manager. Project status was spread across spreadsheets and a task tracker, so a consolidated
 picture of the portfolio took manual work every time someone asked for it. I wanted one place where that picture
-is always current — so I built it, and it is now in daily use by project managers and management.
+is always current — so I built it, and it is now in production, used by project managers at the company.
 
-I built it the way I believe software will increasingly be built: **I owned the product, the architecture
-decisions and the review; AI coding agents (Claude Code) wrote most of the code** under strict guardrails —
+I built it the way I believe software will increasingly be built: **I owned the product — specs, priorities,
+acceptance and release; AI coding agents (mostly Claude Code) wrote the code** under strict guardrails —
 tests first, byte-level API contracts, visual regression, and multi-agent adversarial code review.
 This repository is a sanitized snapshot of that work.
 
@@ -161,10 +161,6 @@ issues and pull requests may go unanswered. Code comments and internal docs are 
 PM Tool's own code is MIT-licensed. Dependencies keep their own licenses — notably **dhtmlx-gantt** (Standard
 edition, GPL-2.0) and **SheetJS** (Apache-2.0). Bitrix24, Fireflies.ai and other services are trademarks of their
 owners.
-
-## ❤️ Support
-
-If this project is useful or inspiring, you can **[buy me a coffee](https://buymeacoffee.com/bykcycd)** ☕
 
 ## 📄 License
 
